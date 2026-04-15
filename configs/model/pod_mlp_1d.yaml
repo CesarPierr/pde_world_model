@@ -1,0 +1,5 @@
+name: pod_mlp_1d
+rank: 16
+hidden_dim: 128
+num_layers: 2
+

@@ -1,0 +1,6 @@
+name: fno_1d
+in_channels: 1
+hidden_channels: 32
+modes: 16
+num_layers: 4
+

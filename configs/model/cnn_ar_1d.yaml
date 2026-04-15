@@ -1,0 +1,6 @@
+name: cnn_ar_1d
+in_channels: 1
+hidden_channels: 64
+num_blocks: 4
+kernel_size: 5
+

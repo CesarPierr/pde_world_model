@@ -67,6 +67,25 @@ uv run python scripts/train_dynamics.py \
   train.batch_size=8
 ```
 
+### Campagne séquentielle Sprint 4
+
+```bash
+uv run python scripts/run_sprint4_experiments.py --prepare-data --epochs 4
+```
+
+Pour `KS 1D`, utiliser par exemple:
+
+```bash
+uv run python scripts/run_sprint4_experiments.py \
+  --prepare-data \
+  --data-config ks_1d \
+  --solver-config ks_1d \
+  --dataset-root data/generated_sprint4/ks_1d_offline/sprint4_ks \
+  --output-root artifacts/runs/sprint4_seq_ks \
+  --data-version sprint4_ks \
+  --epochs 4
+```
+
 ## Notes plateforme
 
 - Le dépôt reste compatible avec `uv run` sur macOS CPU pour Burgers/KS 1D.

@@ -1,0 +1,15 @@
+dataset_root: data/generated/burgers_1d_offline/v0
+train_splits: [train]
+val_splits: [val]
+test_splits: [test]
+rollout_horizon: 2
+batch_size: 8
+epochs: 10
+learning_rate: 0.001
+weight_decay: 0.0
+device: cpu
+num_workers: 0
+output_dir: artifacts/runs/baseline_1d
+loss_weights:
+  phys_1step: 1.0
+  rollout: 0.5

@@ -18,7 +18,7 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
 | Sprint 1 | solveurs 1D + génération dataset + QA | done | Burgers 1D et KS 1D, writer Zarr, manifests, script offline, tests unitaires et smoke tests |
 | Sprint 2 | AE 1D + losses reconstruction | done | AE 1D résiduel, losses L1/L2/gradient/spectrale, trainer, tests et smoke train |
 | Sprint 3 | dynamique latente 1D single-PDE | done | dataset de fenêtres, encodeur contexte physique, transition FiLM, trainer, tests et smoke train réel |
-| Sprint 4 | baselines 1D | planned | CNN AR, U-Net AR, FNO, POD+MLP |
+| Sprint 4 | baselines 1D | done | CNN AR, U-Net AR, FNO 1D et POD+MLP, trainer commun, runner séquentiel, campagne Burgers 1D lancée |
 | Sprint 5 | acquisition online 1D | planned | memory bank, uncertainty, diversity, risk |
 | Sprint 6 | multi-paramètre / multi-PDE 1D | planned | shared latent + invariance |
 | Sprint 7+ | extension 2D et orchestration distribuée | planned | diffusion-reaction puis NS |
@@ -39,6 +39,7 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
 | losses reconstruction L1/L2/gradient/spectrale | `spec_model_and_losses.md` | done | implémentées et testées |
 | surfit court batch AE | `world_model_pde_publication_grade_plan.md` | done | test d'overfit sur petit batch + smoke train sur dataset offline |
 | setup reproductible local et future machine GPU | demande utilisateur | done | workflow `uv` CPU/CUDA documenté et verrouillé via `uv.lock` |
+| baselines 1D comparables sous protocole commun | `spec_benchmarks_and_baselines.md` | done | CNN AR, U-Net AR, FNO 1D, POD+MLP, même dataset et même horizon de rollout |
 
 ## Journal synthétique
 
@@ -54,10 +55,16 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
 - validations `uv`: `uv run pytest -q`, génération offline Burgers via `uv run`, puis entraînement AE réel avec amélioration val d'environ 54%.
 - sprint 3 implémenté: `TransitionWindowDataset`, encodeur de contexte physique, dynamique latente 1D conditionnée par FiLM, script `train_dynamics.py`;
 - validations Sprint 3: `uv run pytest -q` vert, smoke train réel `AE gelé -> dynamics` avec meilleure `val_loss` ~ `0.108` sur Burgers 1D.
+- sprint 4 implémenté: modèles `cnn_ar_1d`, `unet_ar_1d`, `fno_1d`, `pod_mlp_1d`, trainer baseline commun et script séquentiel `run_sprint4_experiments.py`;
+- campagne Sprint 4 Burgers 1D lancée séquentiellement sur Mac CPU, résultats initiaux:
+  - `fno_1d` meilleur: test one-step ~ `2.8e-06`, rollout ~ `7.0e-06`;
+  - `unet_ar_1d` second: test one-step ~ `9.1e-05`, rollout ~ `2.25e-04`;
+  - `cnn_ar_1d` derrière: test one-step ~ `6.9e-04`, rollout ~ `1.67e-03`;
+  - `pod_mlp_1d` nettement plus faible: test one-step ~ `7.48e-03`, rollout ~ `7.75e-03`.
 
 ## Prochaines actions fermes
 
-1. implémenter les baselines 1D du Sprint 4: CNN AR, U-Net AR, FNO, POD+MLP.
-2. figer un protocole de comparaison commun avec mêmes splits et mêmes horizons.
-3. ajouter une première évaluation benchmark one-step / rollout.
-4. préparer l'entrée du Sprint 5 acquisition online à partir du latent appris.
+1. étendre la campagne séquentielle Sprint 4 à `ks_1d` avec le même runner.
+2. comparer explicitement les baselines au world model latent sur mêmes splits et mêmes horizons.
+3. ajouter une couche d'évaluation benchmark exportable pour tableaux/figures.
+4. préparer l'entrée du Sprint 5 acquisition online à partir des meilleurs modèles de référence.
