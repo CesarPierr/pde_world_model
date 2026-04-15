@@ -15,6 +15,7 @@ def main() -> None:
     parser.add_argument("--data-config", default="burgers_1d")
     parser.add_argument("--solver-config", default="burgers_1d")
     parser.add_argument("--dataset-root", default="data/generated_sprint4/burgers_1d_offline/sprint4")
+    parser.add_argument("--data-output-dir", default="data/generated_sprint4")
     parser.add_argument("--output-root", default="artifacts/runs/sprint4_seq")
     parser.add_argument("--data-version", default="sprint4")
     parser.add_argument("--epochs", type=int, default=6)
@@ -38,7 +39,7 @@ def main() -> None:
                 "--solver-config",
                 args.solver_config,
                 f"data.dataset_version={args.data_version}",
-                "data.output_dir=data/generated_sprint4",
+                f"data.output_dir={args.data_output_dir}",
                 "data.splits.train.num_trajectories=12",
                 "data.splits.val.num_trajectories=4",
                 "data.splits.test.num_trajectories=4",

@@ -35,6 +35,8 @@ def main() -> None:
                 "burgers_1d",
                 "--dataset-root",
                 "data/generated_long/burgers_1d_offline/long_burgers",
+                "--data-output-dir",
+                "data/generated_long",
                 "--output-root",
                 "artifacts/runs/long_burgers_baselines",
                 "--data-version",
@@ -55,6 +57,8 @@ def main() -> None:
                 "ks_1d",
                 "--dataset-root",
                 "data/generated_long/ks_1d_offline/long_ks",
+                "--data-output-dir",
+                "data/generated_long",
                 "--output-root",
                 "artifacts/runs/long_ks_baselines",
                 "--data-version",
@@ -99,4 +103,3 @@ def _run(command: list[str]) -> None:
 
 if __name__ == "__main__":
     main()
-
