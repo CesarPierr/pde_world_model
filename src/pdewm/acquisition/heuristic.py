@@ -169,6 +169,15 @@ def rank_candidates(
             base_score=lambda candidate: candidate.score,
             diversity_lambda=diversity_lambda,
         )
+    # Generative strategies: candidates are already produced by flow
+    # matching; rank them the same way as "ours" (score + diversity).
+    if strategy in ("generative_loss_weighted", "generative_uniform", "generative_combined"):
+        ranked = sorted(candidates, key=lambda item: item.score, reverse=True)[:top_m]
+        return _greedy_diverse_ranking(
+            ranked,
+            base_score=lambda candidate: candidate.score,
+            diversity_lambda=diversity_lambda,
+        )
     raise ValueError(f"Unsupported acquisition strategy: {strategy}")
 
 
