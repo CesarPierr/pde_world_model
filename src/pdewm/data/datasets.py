@@ -11,6 +11,7 @@ import torch
 import zarr
 from torch.utils.data import Dataset
 
+from pdewm.data.schema import TransitionMetadata, TransitionRecord
 from pdewm.data.context_features import DEFAULT_CONTEXT_FEATURES, build_pde_index, metadata_to_context_vector
 
 
@@ -41,6 +42,33 @@ def load_transition_bundle(dataset_root: str | Path) -> TransitionArrayBundle:
         metadata=metadata,
         manifest=manifest,
     )
+
+
+def load_transition_records(dataset_root: str | Path) -> tuple[list[TransitionRecord], dict[str, Any]]:
+    bundle = load_transition_bundle(dataset_root)
+    records: list[TransitionRecord] = []
+    for index, metadata in enumerate(bundle.metadata):
+        record = TransitionRecord(
+            state=np.asarray(bundle.state[index], dtype=np.float32),
+            next_state=np.asarray(bundle.next_state[index], dtype=np.float32),
+            metadata=TransitionMetadata(
+                time_index=int(metadata["time_index"]),
+                dt=float(metadata["dt"]),
+                pde_id=str(metadata["pde_id"]),
+                pde_params={str(key): float(value) for key, value in dict(metadata["pde_params"]).items()},
+                bc_descriptor=dict(metadata["bc_descriptor"]),
+                forcing_descriptor=dict(metadata["forcing_descriptor"]),
+                grid_descriptor=dict(metadata["grid_descriptor"]),
+                trajectory_id=str(metadata["trajectory_id"]),
+                split=str(metadata["split"]),
+                sample_origin=str(metadata["sample_origin"]),
+                solver_status=str(metadata["solver_status"]),
+                solver_runtime_sec=float(metadata["solver_runtime_sec"]),
+                seed=int(metadata["seed"]),
+            ),
+        )
+        records.append(record)
+    return records, bundle.manifest
 
 
 class StateAutoencoderDataset(Dataset[torch.Tensor]):

@@ -51,18 +51,19 @@ def main() -> None:
     results = []
     for baseline in args.baselines:
         baseline_output = output_root / baseline
-        _run(
-            [
-                sys.executable,
-                "scripts/train_baseline.py",
-                "--model-config",
-                baseline,
-                f"train.dataset_root={dataset_root}",
-                f"train.output_dir={baseline_output}",
-                f"train.epochs={args.epochs}",
-            ]
-        )
         summary_path = baseline_output / "summary.json"
+        if not summary_path.exists():
+            _run(
+                [
+                    sys.executable,
+                    "scripts/train_baseline.py",
+                    "--model-config",
+                    baseline,
+                    f"train.dataset_root={dataset_root}",
+                    f"train.output_dir={baseline_output}",
+                    f"train.epochs={args.epochs}",
+                ]
+            )
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
         results.append(summary)
         (output_root / "summary.json").write_text(json.dumps(results, indent=2), encoding="utf-8")

@@ -22,8 +22,9 @@ def main() -> None:
     summary = train_baseline(cfg)
     print(f"model={summary['model_name']}")
     print(f"best_val_loss={summary['best_val_loss']:.6f}")
+    print(f"test_one_step={summary['test_metrics']['phys_1step']:.6f}")
+    print(f"test_rollout={summary['test_metrics']['rollout']:.6f}")
 
 
 if __name__ == "__main__":
     main()
-

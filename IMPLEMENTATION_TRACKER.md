@@ -19,7 +19,7 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
 | Sprint 2 | AE 1D + losses reconstruction | done | AE 1D résiduel, losses L1/L2/gradient/spectrale, trainer, tests et smoke train |
 | Sprint 3 | dynamique latente 1D single-PDE | done | dataset de fenêtres, encodeur contexte physique, transition FiLM, trainer, tests et smoke train réel |
 | Sprint 4 | baselines 1D | done | CNN AR, U-Net AR, FNO 1D et POD+MLP, trainer commun, runner séquentiel, campagne Burgers 1D lancée |
-| Sprint 5 | acquisition online 1D | planned | memory bank, uncertainty, diversity, risk |
+| Sprint 5 | acquisition online 1D | in_progress | boucle heuristique memory-bank + uncertainty + novelty + risk + réentraînement de comité, smoke test validé |
 | Sprint 6 | multi-paramètre / multi-PDE 1D | planned | shared latent + invariance |
 | Sprint 7+ | extension 2D et orchestration distribuée | planned | diffusion-reaction puis NS |
 
@@ -33,7 +33,7 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
 | POC 1D avant multi-PDE/2D | `world_model_pde_publication_grade_plan.md` | done | ordre d'exécution conservé dans le code et le suivi |
 | AE non conditionné par PDE | `spec_model_and_losses.md` | done | interface `encode/decode` sans dépendance à la PDE ni skip externe |
 | dynamique conditionnée par contexte physique | `spec_model_and_losses.md` | done | encodeur `pde_id + paramètres + dt`, transition FiLM résiduelle |
-| acquisition initiale en contextual batch bandit | `spec_online_acquisition_and_rl.md` | planned | pas encore codé |
+| acquisition initiale en contextual batch bandit | `spec_online_acquisition_and_rl.md` | in_progress | version heuristique score-based livrée; policy apprise et crash predictor dédié restent à faire |
 | solveurs 1D déterministes avec QA | `spec_benchmarks_and_baselines.md` | done | tests solveurs + génération offline validée |
 | config centralisée de type Hydra ou équivalent | `spec_ray_slurm_wandb_architecture.md` | done | loader YAML `OmegaConf` avec overrides `key=value`, choisi pour éviter l'incompatibilité Hydra/Python 3.14 de l'environnement |
 | losses reconstruction L1/L2/gradient/spectrale | `spec_model_and_losses.md` | done | implémentées et testées |
@@ -61,10 +61,12 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
   - `unet_ar_1d` second: test one-step ~ `9.1e-05`, rollout ~ `2.25e-04`;
   - `cnn_ar_1d` derrière: test one-step ~ `6.9e-04`, rollout ~ `1.67e-03`;
   - `pod_mlp_1d` nettement plus faible: test one-step ~ `7.48e-03`, rollout ~ `7.75e-03`.
+- sprint 5 initial implémenté: acquisition heuristique en espace d'états/latent, enrichissement dataset versionné, réentraînement séquentiel d'un comité de dynamique;
+- validations Sprint 5: smoke test court `run_worldmodel_active_sampling.py` sur Burgers 1D avec 1 itération online, 2 membres d'ensemble, 12 nouveaux samples acquis et réentraînement réussi.
 
 ## Prochaines actions fermes
 
-1. étendre la campagne séquentielle Sprint 4 à `ks_1d` avec le même runner.
-2. comparer explicitement les baselines au world model latent sur mêmes splits et mêmes horizons.
-3. ajouter une couche d'évaluation benchmark exportable pour tableaux/figures.
-4. préparer l'entrée du Sprint 5 acquisition online à partir des meilleurs modèles de référence.
+1. laisser tourner la campagne longue chaînée et revenir sur les logs/résumés.
+2. ajouter une comparaison explicite `baselines longues vs world model long vs world model + active sampling`.
+3. durcir Sprint 5 avec un crash predictor dédié et une policy apprise si le gain heuristique est confirmé.
+4. étendre la même logique à `ks_1d`.

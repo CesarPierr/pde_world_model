@@ -16,6 +16,8 @@ def main() -> None:
     seed_everything(int(cfg.project.seed))
     result = train_latent_dynamics(cfg)
     print(f"best_val_loss={result['best_val_loss']:.6f}")
+    print(f"test_one_step={result['test_metrics']['phys_1step']:.6f}")
+    print(f"test_rollout={result['test_metrics']['rollout']:.6f}")
 
 
 if __name__ == "__main__":

@@ -20,6 +20,8 @@ Mémoire persistante de pilotage. Ce fichier résume où reprendre le travail sa
 - le setup `uv` est désormais la voie standard: Python 3.12, `uv.lock`, bootstrap `cpu`/`cuda`, tests et smoke runs déjà validés;
 - le sprint 3 est livré: dynamique latente 1D conditionnée par contexte physique, avec trainer et smoke train réel sur Burgers;
 - le sprint 4 est livré: baselines 1D directes + runner séquentiel, avec première campagne Burgers déjà exécutée.
+- le sprint 5 heuristique est désormais entamé: active sampling d'états, versioning dataset online, réentraînement du comité, smoke test court validé;
+- un runner long chaîné existe maintenant pour lancer les campagnes longues d'un seul bloc, avec script de lancement en arrière-plan.
 
 ## Règles de conduite du projet
 
@@ -31,6 +33,6 @@ Mémoire persistante de pilotage. Ce fichier résume où reprendre le travail sa
 ## Reprise recommandée au prochain échange
 
 1. vérifier l'état git et le contenu de `IMPLEMENTATION_TRACKER.md`;
-2. soit étendre Sprint 4 à `ks_1d`, soit brancher une évaluation comparative world model vs baselines;
+2. surveiller la campagne longue via les logs puis analyser les résultats consolidés;
 3. mettre à jour ce fichier et le tracker après chaque bloc livré;
 4. conserver la discipline commit par commit avec vérification locale avant chaque commit.

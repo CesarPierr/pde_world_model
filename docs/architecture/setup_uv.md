@@ -86,6 +86,35 @@ uv run python scripts/run_sprint4_experiments.py \
   --epochs 4
 ```
 
+### Campagne longue chaînée
+
+Lancement direct au premier plan:
+
+```bash
+uv run python scripts/run_long_campaign.py --prepare-data
+```
+
+Lancement en arrière-plan avec log et PID:
+
+```bash
+./scripts/launch_long_campaign.sh --prepare-data
+```
+
+Par défaut, la campagne longue enchaîne:
+
+- baselines Burgers 1D longues;
+- baselines KS 1D longues;
+- world model Burgers 1D long avec acquisition online par active sampling d'états.
+
+Les defaults actuels sont:
+
+- `baseline_epochs=120`
+- `ae_epochs=120`
+- `dynamics_epochs=120`
+- `fine_tune_epochs=100`
+- `online_iters=3`
+- `ensemble_size=3`
+
 ## Notes plateforme
 
 - Le dépôt reste compatible avec `uv run` sur macOS CPU pour Burgers/KS 1D.

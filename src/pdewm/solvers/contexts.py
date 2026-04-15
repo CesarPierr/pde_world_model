@@ -25,3 +25,14 @@ class PDEContext:
             "dimension": self.dimension,
         }
 
+
+def context_from_metadata(metadata: dict[str, Any]) -> PDEContext:
+    return PDEContext(
+        pde_id=str(metadata["pde_id"]),
+        parameters={str(key): float(value) for key, value in dict(metadata["pde_params"]).items()},
+        boundary_conditions=dict(metadata.get("bc_descriptor", {})),
+        forcing_descriptor=dict(metadata.get("forcing_descriptor", {})),
+        grid_descriptor=dict(metadata.get("grid_descriptor", {})),
+        dt=float(metadata["dt"]),
+        dimension=int(metadata.get("dimension", 1)),
+    )

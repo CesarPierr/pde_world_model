@@ -56,6 +56,12 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
         rollout_horizon=int(cfg.train.rollout_horizon),
         context_feature_keys=context_features,
     )
+    test_dataset = TransitionWindowDataset(
+        cfg.train.dataset_root,
+        splits=tuple(cfg.train.test_splits),
+        rollout_horizon=int(cfg.train.rollout_horizon),
+        context_feature_keys=context_features,
+    )
 
     transition_model = LatentTransitionModel1D(
         TransitionModel1DConfig(
@@ -84,6 +90,12 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
     )
     val_loader = DataLoader(
         val_dataset,
+        batch_size=int(cfg.train.batch_size),
+        shuffle=False,
+        num_workers=int(cfg.train.num_workers),
+    )
+    test_loader = DataLoader(
+        test_dataset,
         batch_size=int(cfg.train.batch_size),
         shuffle=False,
         num_workers=int(cfg.train.num_workers),
@@ -129,8 +141,71 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
             best_val = val_metrics.loss
             torch.save(checkpoint, output_dir / "best.pt")
 
+    best_checkpoint = torch.load(output_dir / "best.pt", map_location=device)
+    transition_model.load_state_dict(best_checkpoint["model_state_dict"])
+    transition_model.to(device)
+    val_best_metrics = _run_dynamics_epoch(
+        transition_model,
+        autoencoder,
+        val_loader,
+        optimizer,
+        cfg.train.loss_weights,
+        device,
+        training=False,
+    )
+    test_metrics = _run_dynamics_epoch(
+        transition_model,
+        autoencoder,
+        test_loader,
+        optimizer,
+        cfg.train.loss_weights,
+        device,
+        training=False,
+    )
+
     (output_dir / "history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
-    return {"history": history, "best_val_loss": best_val}
+    summary = {
+        "best_val_loss": best_val,
+        "best_epoch": int(best_checkpoint["epoch"]),
+        "val_metrics": val_best_metrics.to_dict(),
+        "test_metrics": test_metrics.to_dict(),
+    }
+    (output_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    return {"history": history, **summary}
+
+
+def load_trained_dynamics(
+    checkpoint_path: str | Path,
+    ae_checkpoint_path: str | Path,
+    *,
+    device: str | torch.device = "cpu",
+) -> tuple[LatentTransitionModel1D, Autoencoder1D, dict[str, Any]]:
+    device = torch.device(device)
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model_cfg = checkpoint["config"]["model"]
+    train_cfg = checkpoint["config"]["train"]
+    autoencoder = _load_frozen_autoencoder(str(ae_checkpoint_path), device)
+    model = LatentTransitionModel1D(
+        TransitionModel1DConfig(
+            latent_channels=int(autoencoder.config.latent_channels),
+            num_pdes=int(len(checkpoint["pde_to_index"])),
+            continuous_context_dim=len(checkpoint["context_features"]),
+            hidden_channels=int(model_cfg["hidden_channels"]),
+            context_hidden_dim=int(model_cfg["context_hidden_dim"]),
+            context_output_dim=int(model_cfg["context_output_dim"]),
+            pde_embedding_dim=int(model_cfg["pde_embedding_dim"]),
+            num_blocks=int(model_cfg["num_blocks"]),
+            kernel_size=int(model_cfg["kernel_size"]),
+        )
+    ).to(device)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.eval()
+    metadata = {
+        "pde_to_index": checkpoint["pde_to_index"],
+        "context_features": tuple(checkpoint["context_features"]),
+        "rollout_horizon": int(train_cfg["rollout_horizon"]),
+    }
+    return model, autoencoder, metadata
 
 
 def _load_frozen_autoencoder(checkpoint_path: str, device: torch.device) -> Autoencoder1D:

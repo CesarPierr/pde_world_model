@@ -2,6 +2,7 @@ dataset_root: data/generated/burgers_1d_offline/v0
 ae_checkpoint: artifacts/runs/autoencoder_1d/best.pt
 train_splits: [train]
 val_splits: [val]
+test_splits: [test]
 context_features:
   - dt
   - viscosity
