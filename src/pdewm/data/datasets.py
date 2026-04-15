@@ -5,7 +5,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+import torch
 import zarr
+from torch.utils.data import Dataset
 
 
 @dataclass(slots=True)
@@ -36,3 +39,27 @@ def load_transition_bundle(dataset_root: str | Path) -> TransitionArrayBundle:
         manifest=manifest,
     )
 
+
+class StateAutoencoderDataset(Dataset[torch.Tensor]):
+    def __init__(
+        self,
+        dataset_root: str | Path,
+        splits: tuple[str, ...] = ("train",),
+        include_next_state: bool = True,
+    ) -> None:
+        bundle = load_transition_bundle(dataset_root)
+        allowed = set(splits)
+        indices = [idx for idx, meta in enumerate(bundle.metadata) if meta["split"] in allowed]
+        states = np.asarray(bundle.state[indices], dtype=np.float32)
+
+        if include_next_state:
+            next_states = np.asarray(bundle.next_state[indices], dtype=np.float32)
+            self.samples = np.concatenate([states, next_states], axis=0)
+        else:
+            self.samples = states
+
+    def __len__(self) -> int:
+        return int(self.samples.shape[0])
+
+    def __getitem__(self, index: int) -> torch.Tensor:
+        return torch.from_numpy(self.samples[index])

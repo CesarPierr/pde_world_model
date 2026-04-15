@@ -15,6 +15,7 @@ wandb/
 artifacts/runs/
 artifacts/generated/
 data/generated/
+data/generated_*/
 data/cache/
 *.zarr/
 *.zip
@@ -23,4 +24,3 @@ data/cache/
 *.ckpt
 *.pt
 *.pth
-

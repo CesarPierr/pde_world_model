@@ -1,0 +1,8 @@
+defaults:
+  - model: autoencoder_1d
+  - train: autoencoder_1d
+  - _self_
+
+project:
+  seed: 7
+

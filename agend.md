@@ -15,7 +15,8 @@ Mémoire persistante de pilotage. Ce fichier résume où reprendre le travail sa
 - les benchmarks de départ retenus sont Burgers 1D et KS 1D;
 - les fichiers de suivi persistants ont été créés pour éviter de repartir de zéro;
 - le sprint 1 est livré: solveurs 1D, writer dataset, manifests et génération offline validés localement;
-- la gestion de configuration est assurée par un loader `OmegaConf` compatible Hydra, car Hydra casse à l'exécution sous Python 3.14 dans cet environnement.
+- la gestion de configuration est assurée par un loader `OmegaConf` compatible Hydra, car Hydra casse à l'exécution sous Python 3.14 dans cet environnement;
+- le sprint 2 est livré: AE 1D, losses L1/L2/gradient/spectrale, trainer, tests et smoke train.
 
 ## Règles de conduite du projet
 
@@ -27,6 +28,6 @@ Mémoire persistante de pilotage. Ce fichier résume où reprendre le travail sa
 ## Reprise recommandée au prochain échange
 
 1. vérifier l'état git et le contenu de `IMPLEMENTATION_TRACKER.md`;
-2. démarrer directement le sprint 2 sur l'AE 1D;
+2. démarrer directement le sprint 3 sur la dynamique latente 1D;
 3. mettre à jour ce fichier et le tracker après chaque bloc livré;
 4. conserver la discipline commit par commit avec vérification locale avant chaque commit.
