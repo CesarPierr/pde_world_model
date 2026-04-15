@@ -73,6 +73,17 @@ uv run python scripts/train_dynamics.py \
 uv run python scripts/run_sprint4_experiments.py --prepare-data --epochs 4
 ```
 
+Avec logging `wandb`:
+
+```bash
+uv run python scripts/run_sprint4_experiments.py \
+  --prepare-data \
+  --epochs 4 \
+  --wandb \
+  --wandb-mode online \
+  --wandb-group sprint4_burgers
+```
+
 Pour `KS 1D`, utiliser par exemple:
 
 ```bash
@@ -92,6 +103,16 @@ Lancement direct au premier plan:
 
 ```bash
 uv run python scripts/run_long_campaign.py --prepare-data
+```
+
+Avec logging `wandb` activé pour tous les sous-runs:
+
+```bash
+uv run python scripts/run_long_campaign.py \
+  --prepare-data \
+  --wandb \
+  --wandb-mode online \
+  --wandb-group long_campaign
 ```
 
 Lancement en arrière-plan avec log et PID:
@@ -114,6 +135,10 @@ Les defaults actuels sont:
 - `fine_tune_epochs=100`
 - `online_iters=3`
 - `ensemble_size=3`
+
+Le logging `wandb` est optionnel et transite par les trainers `autoencoder`, `baseline` et `dynamics`.
+Les runners séquentiels propagent `project/entity/mode/group/name/tags` vers les sous-runs.
+Pour une validation locale sans réseau, utiliser `--wandb-mode offline`.
 
 ## Notes plateforme
 

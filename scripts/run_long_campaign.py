@@ -18,9 +18,21 @@ def main() -> None:
     parser.add_argument("--run-ks-baselines", action="store_true")
     parser.add_argument("--run-worldmodel-active", action="store_true")
     parser.add_argument("--prepare-data", action="store_true")
+    parser.add_argument("--wandb", action="store_true")
+    parser.add_argument("--wandb-project", default="pde-world-model")
+    parser.add_argument("--wandb-entity", default="")
+    parser.add_argument("--wandb-mode", default="online")
+    parser.add_argument("--wandb-group", default="")
     args = parser.parse_args()
 
     run_all = not (args.run_burgers_baselines or args.run_ks_baselines or args.run_worldmodel_active)
+    wandb_args = _wandb_args(
+        enabled=args.wandb,
+        project=args.wandb_project,
+        entity=args.wandb_entity,
+        mode=args.wandb_mode,
+        group=args.wandb_group or "long_campaign",
+    )
     if args.run_burgers_baselines or run_all:
         _run(
             [
@@ -41,6 +53,7 @@ def main() -> None:
                 "artifacts/runs/long_burgers_baselines",
                 "--data-version",
                 "long_burgers",
+                *wandb_args,
             ]
         )
     if args.run_ks_baselines or run_all:
@@ -63,6 +76,7 @@ def main() -> None:
                 "artifacts/runs/long_ks_baselines",
                 "--data-version",
                 "long_ks",
+                *wandb_args,
             ]
         )
     if args.run_worldmodel_active or run_all:
@@ -92,6 +106,7 @@ def main() -> None:
                 str(args.online_iters),
                 "--ensemble-size",
                 str(args.ensemble_size),
+                *wandb_args,
             ]
         )
 
@@ -99,6 +114,30 @@ def main() -> None:
 def _run(command: list[str]) -> None:
     filtered = [part for part in command if part]
     subprocess.run(filtered, check=True)
+
+
+def _wandb_args(
+    *,
+    enabled: bool,
+    project: str,
+    entity: str,
+    mode: str,
+    group: str,
+) -> list[str]:
+    if not enabled:
+        return []
+    args = [
+        "--wandb",
+        "--wandb-project",
+        project,
+        "--wandb-mode",
+        mode,
+        "--wandb-group",
+        group,
+    ]
+    if entity:
+        args.extend(["--wandb-entity", entity])
+    return args
 
 
 if __name__ == "__main__":

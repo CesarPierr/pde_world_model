@@ -1,8 +1,10 @@
 defaults:
+  - logging: wandb
   - model: cnn_ar_1d
   - train: baseline_1d
   - _self_
 
 project:
+  name: pde-world-model
+  phase: sprint4_baseline
   seed: 7
-

@@ -43,6 +43,11 @@ def main() -> None:
     parser.add_argument("--acquisition-rollout-steps", type=int, default=8)
     parser.add_argument("--noise-std", type=float, default=0.08)
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--wandb", action="store_true")
+    parser.add_argument("--wandb-project", default="pde-world-model")
+    parser.add_argument("--wandb-entity", default="")
+    parser.add_argument("--wandb-mode", default="online")
+    parser.add_argument("--wandb-group", default="")
     args = parser.parse_args()
 
     dataset_root = Path(args.dataset_root)
@@ -73,18 +78,30 @@ def main() -> None:
     ae_dir = output_root / "autoencoder"
     ae_checkpoint = ae_dir / "best.pt"
     if args.prepare_ae or not ae_checkpoint.exists():
+        ae_command = [
+            sys.executable,
+            "scripts/train_autoencoder.py",
+            f"train.dataset_root={dataset_root}",
+            f"train.output_dir={ae_dir}",
+            f"train.epochs={args.ae_epochs}",
+            "train.batch_size=16",
+            "model.base_channels=16",
+            "model.latent_channels=32",
+            "model.channel_multipliers=[1,2,4]",
+        ]
+        ae_command.extend(
+            _wandb_overrides(
+                enabled=args.wandb,
+                project=args.wandb_project,
+                entity=args.wandb_entity,
+                mode=args.wandb_mode,
+                group=args.wandb_group or f"worldmodel_{args.data_version}",
+                name=f"{args.data_version}_autoencoder",
+                tags=["active_sampling", args.data_config, "autoencoder_1d"],
+            )
+        )
         _run(
-            [
-                sys.executable,
-                "scripts/train_autoencoder.py",
-                f"train.dataset_root={dataset_root}",
-                f"train.output_dir={ae_dir}",
-                f"train.epochs={args.ae_epochs}",
-                "train.batch_size=16",
-                "model.base_channels=16",
-                "model.latent_channels=32",
-                "model.channel_multipliers=[1,2,4]",
-            ]
+            ae_command
         )
 
     current_dataset_root = dataset_root
@@ -102,21 +119,39 @@ def main() -> None:
             member_dir = committee_dir / f"member_{member_index:02d}"
             summary_path = member_dir / "summary.json"
             if not summary_path.exists():
+                member_command = [
+                    sys.executable,
+                    "scripts/train_dynamics.py",
+                    f"train.dataset_root={current_dataset_root}",
+                    f"train.ae_checkpoint={ae_checkpoint}",
+                    f"train.output_dir={member_dir}",
+                    f"train.epochs={epochs}",
+                    f"project.seed={args.seed + member_index}",
+                    "train.batch_size=8",
+                    "model.hidden_channels=32",
+                    "model.context_hidden_dim=32",
+                    "model.context_output_dim=32",
+                    "model.num_blocks=2",
+                ]
+                member_command.extend(
+                    _wandb_overrides(
+                        enabled=args.wandb,
+                        project=args.wandb_project,
+                        entity=args.wandb_entity,
+                        mode=args.wandb_mode,
+                        group=args.wandb_group or f"worldmodel_{args.data_version}",
+                        name=f"{args.data_version}_iter{iteration:02d}_member{member_index:02d}",
+                        tags=[
+                            "active_sampling",
+                            args.data_config,
+                            "dynamics_1d",
+                            f"iter_{iteration:02d}",
+                            f"member_{member_index:02d}",
+                        ],
+                    )
+                )
                 _run(
-                    [
-                        sys.executable,
-                        "scripts/train_dynamics.py",
-                        f"train.dataset_root={current_dataset_root}",
-                        f"train.ae_checkpoint={ae_checkpoint}",
-                        f"train.output_dir={member_dir}",
-                        f"train.epochs={epochs}",
-                        f"project.seed={args.seed + member_index}",
-                        "train.batch_size=8",
-                        "model.hidden_channels=32",
-                        "model.context_hidden_dim=32",
-                        "model.context_output_dim=32",
-                        "model.num_blocks=2",
-                    ]
+                    member_command
                 )
             committee_checkpoints.append(str(member_dir / "best.pt"))
             ensemble_summaries.append(json.loads(summary_path.read_text(encoding="utf-8")))
@@ -248,6 +283,31 @@ def _write_campaign_summary(output_root: Path, summary: list[dict[str, object]])
 
 def _run(command: list[str]) -> None:
     subprocess.run(command, check=True)
+
+
+def _wandb_overrides(
+    *,
+    enabled: bool,
+    project: str,
+    entity: str,
+    mode: str,
+    group: str,
+    name: str,
+    tags: list[str],
+) -> list[str]:
+    if not enabled:
+        return []
+    overrides = [
+        "logging.wandb.enabled=true",
+        f"logging.wandb.project={project}",
+        f"logging.wandb.mode={mode}",
+        f"logging.wandb.group={group}",
+        f"logging.wandb.name={name}",
+        f"logging.wandb.tags=[{','.join(tags)}]",
+    ]
+    if entity:
+        overrides.append(f"logging.wandb.entity={entity}")
+    return overrides
 
 
 if __name__ == "__main__":

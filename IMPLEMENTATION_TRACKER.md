@@ -40,6 +40,7 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
 | surfit court batch AE | `world_model_pde_publication_grade_plan.md` | done | test d'overfit sur petit batch + smoke train sur dataset offline |
 | setup reproductible local et future machine GPU | demande utilisateur | done | workflow `uv` CPU/CUDA documenté et verrouillé via `uv.lock` |
 | baselines 1D comparables sous protocole commun | `spec_benchmarks_and_baselines.md` | done | CNN AR, U-Net AR, FNO 1D, POD+MLP, même dataset et même horizon de rollout |
+| suivi d'expériences et métriques avec wandb | `spec_ray_slurm_wandb_architecture.md` + demande utilisateur | done | instrumentation `wandb` optionnelle branchée dans `train_autoencoder.py`, `train_baseline.py`, `train_dynamics.py` et propagée dans les runners séquentiels |
 
 ## Journal synthétique
 
@@ -63,6 +64,7 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
   - `pod_mlp_1d` nettement plus faible: test one-step ~ `7.48e-03`, rollout ~ `7.75e-03`.
 - sprint 5 initial implémenté: acquisition heuristique en espace d'états/latent, enrichissement dataset versionné, réentraînement séquentiel d'un comité de dynamique;
 - validations Sprint 5: smoke test court `run_worldmodel_active_sampling.py` sur Burgers 1D avec 1 itération online, 2 membres d'ensemble, 12 nouveaux samples acquis et réentraînement réussi.
+- logging `wandb` ajouté: dépendance projet, wrapper optionnel, logs epoch/final summary, groupage via runners longs et smoke run local validé en mode `offline`.
 
 ## Prochaines actions fermes
 

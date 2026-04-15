@@ -1,0 +1,11 @@
+wandb:
+  enabled: false
+  project: pde-world-model
+  entity: null
+  mode: online
+  group: null
+  name: null
+  job_type: null
+  tags: []
+  notes: null
+  dir: artifacts/wandb

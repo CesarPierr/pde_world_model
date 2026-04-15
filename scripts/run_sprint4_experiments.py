@@ -23,6 +23,11 @@ def main() -> None:
     parser.add_argument("--num-steps", type=int, default=16)
     parser.add_argument("--prepare-data", action="store_true")
     parser.add_argument("--baselines", nargs="+", default=list(DEFAULT_BASELINES))
+    parser.add_argument("--wandb", action="store_true")
+    parser.add_argument("--wandb-project", default="pde-world-model")
+    parser.add_argument("--wandb-entity", default="")
+    parser.add_argument("--wandb-mode", default="online")
+    parser.add_argument("--wandb-group", default="")
     args = parser.parse_args()
 
     dataset_root = Path(args.dataset_root)
@@ -54,16 +59,28 @@ def main() -> None:
         baseline_output = output_root / baseline
         summary_path = baseline_output / "summary.json"
         if not summary_path.exists():
+            command = [
+                sys.executable,
+                "scripts/train_baseline.py",
+                "--model-config",
+                baseline,
+                f"train.dataset_root={dataset_root}",
+                f"train.output_dir={baseline_output}",
+                f"train.epochs={args.epochs}",
+            ]
+            command.extend(
+                _wandb_overrides(
+                    enabled=args.wandb,
+                    project=args.wandb_project,
+                    entity=args.wandb_entity,
+                    mode=args.wandb_mode,
+                    group=args.wandb_group or f"sprint4_{args.data_version}",
+                    name=f"{args.data_version}_{baseline}",
+                    tags=["sprint4_seq", args.data_config, baseline],
+                )
+            )
             _run(
-                [
-                    sys.executable,
-                    "scripts/train_baseline.py",
-                    "--model-config",
-                    baseline,
-                    f"train.dataset_root={dataset_root}",
-                    f"train.output_dir={baseline_output}",
-                    f"train.epochs={args.epochs}",
-                ]
+                command
             )
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
         results.append(summary)
@@ -75,6 +92,31 @@ def main() -> None:
 
 def _run(command: list[str]) -> None:
     subprocess.run(command, check=True)
+
+
+def _wandb_overrides(
+    *,
+    enabled: bool,
+    project: str,
+    entity: str,
+    mode: str,
+    group: str,
+    name: str,
+    tags: list[str],
+) -> list[str]:
+    if not enabled:
+        return []
+    overrides = [
+        "logging.wandb.enabled=true",
+        f"logging.wandb.project={project}",
+        f"logging.wandb.mode={mode}",
+        f"logging.wandb.group={group}",
+        f"logging.wandb.name={name}",
+        f"logging.wandb.tags=[{','.join(tags)}]",
+    ]
+    if entity:
+        overrides.append(f"logging.wandb.entity={entity}")
+    return overrides
 
 
 def _format_markdown_summary(results: list[dict[str, object]]) -> str:

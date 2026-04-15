@@ -19,6 +19,7 @@ from pdewm.models.dynamics.transition_1d import (
     rollout_latent_dynamics,
 )
 from pdewm.models.representations.autoencoder_1d import Autoencoder1D, Autoencoder1DConfig
+from pdewm.utils.wandb import flatten_metrics, init_wandb_run
 
 
 @dataclass(slots=True)
@@ -105,18 +106,64 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     best_val = float("inf")
     history: list[dict[str, Any]] = []
+    wandb_run = init_wandb_run(
+        cfg,
+        default_name=f"dynamics-{output_dir.name}",
+        default_group=f"dynamics::{Path(str(cfg.train.dataset_root)).name}",
+        default_job_type="train_dynamics",
+        extra_tags=["dynamics_1d", str(OmegaConf.select(cfg, "project.phase") or "unknown_phase")],
+    )
 
-    for epoch in range(1, int(cfg.train.epochs) + 1):
-        train_metrics = _run_dynamics_epoch(
-            transition_model,
-            autoencoder,
-            train_loader,
-            optimizer,
-            cfg.train.loss_weights,
-            device,
-            training=True,
-        )
-        val_metrics = _run_dynamics_epoch(
+    try:
+        for epoch in range(1, int(cfg.train.epochs) + 1):
+            train_metrics = _run_dynamics_epoch(
+                transition_model,
+                autoencoder,
+                train_loader,
+                optimizer,
+                cfg.train.loss_weights,
+                device,
+                training=True,
+            )
+            val_metrics = _run_dynamics_epoch(
+                transition_model,
+                autoencoder,
+                val_loader,
+                optimizer,
+                cfg.train.loss_weights,
+                device,
+                training=False,
+            )
+            history.append({"epoch": epoch, "train": train_metrics.to_dict(), "val": val_metrics.to_dict()})
+            checkpoint = {
+                "epoch": epoch,
+                "model_state_dict": transition_model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "train_metrics": train_metrics.to_dict(),
+                "val_metrics": val_metrics.to_dict(),
+                "config": OmegaConf.to_container(cfg, resolve=True),
+                "pde_to_index": train_dataset.pde_to_index,
+                "context_features": list(context_features),
+            }
+            torch.save(checkpoint, output_dir / "last.pt")
+            if val_metrics.loss < best_val:
+                best_val = val_metrics.loss
+                torch.save(checkpoint, output_dir / "best.pt")
+
+            wandb_run.log(
+                {
+                    "epoch": epoch,
+                    **flatten_metrics("train", train_metrics.to_dict()),
+                    **flatten_metrics("val", val_metrics.to_dict()),
+                    "best/val_loss": best_val,
+                },
+                step=epoch,
+            )
+
+        best_checkpoint = torch.load(output_dir / "best.pt", map_location=device)
+        transition_model.load_state_dict(best_checkpoint["model_state_dict"])
+        transition_model.to(device)
+        val_best_metrics = _run_dynamics_epoch(
             transition_model,
             autoencoder,
             val_loader,
@@ -125,52 +172,34 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
             device,
             training=False,
         )
-        history.append({"epoch": epoch, "train": train_metrics.to_dict(), "val": val_metrics.to_dict()})
-        checkpoint = {
-            "epoch": epoch,
-            "model_state_dict": transition_model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-            "train_metrics": train_metrics.to_dict(),
-            "val_metrics": val_metrics.to_dict(),
-            "config": OmegaConf.to_container(cfg, resolve=True),
-            "pde_to_index": train_dataset.pde_to_index,
-            "context_features": list(context_features),
+        test_metrics = _run_dynamics_epoch(
+            transition_model,
+            autoencoder,
+            test_loader,
+            optimizer,
+            cfg.train.loss_weights,
+            device,
+            training=False,
+        )
+
+        summary = {
+            "best_val_loss": best_val,
+            "best_epoch": int(best_checkpoint["epoch"]),
+            "val_metrics": val_best_metrics.to_dict(),
+            "test_metrics": test_metrics.to_dict(),
         }
-        torch.save(checkpoint, output_dir / "last.pt")
-        if val_metrics.loss < best_val:
-            best_val = val_metrics.loss
-            torch.save(checkpoint, output_dir / "best.pt")
+    finally:
+        history_path = output_dir / "history.json"
+        history_path.write_text(json.dumps(history, indent=2), encoding="utf-8")
+        summary = locals().get("summary", {"best_val_loss": best_val})
+        summary_path = output_dir / "summary.json"
+        summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        wandb_run.update_summary(flatten_metrics("summary", summary))
+        wandb_run.update_summary({"output_dir": str(output_dir)})
+        wandb_run.save_file(history_path)
+        wandb_run.save_file(summary_path)
+        wandb_run.finish()
 
-    best_checkpoint = torch.load(output_dir / "best.pt", map_location=device)
-    transition_model.load_state_dict(best_checkpoint["model_state_dict"])
-    transition_model.to(device)
-    val_best_metrics = _run_dynamics_epoch(
-        transition_model,
-        autoencoder,
-        val_loader,
-        optimizer,
-        cfg.train.loss_weights,
-        device,
-        training=False,
-    )
-    test_metrics = _run_dynamics_epoch(
-        transition_model,
-        autoencoder,
-        test_loader,
-        optimizer,
-        cfg.train.loss_weights,
-        device,
-        training=False,
-    )
-
-    (output_dir / "history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
-    summary = {
-        "best_val_loss": best_val,
-        "best_epoch": int(best_checkpoint["epoch"]),
-        "val_metrics": val_best_metrics.to_dict(),
-        "test_metrics": test_metrics.to_dict(),
-    }
-    (output_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return {"history": history, **summary}
 
 

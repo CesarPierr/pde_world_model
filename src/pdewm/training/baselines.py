@@ -15,6 +15,7 @@ from pdewm.baselines.common import rollout_state_model
 from pdewm.baselines.factory import build_baseline_model
 from pdewm.baselines.pod_mlp import PODMLPBaseline
 from pdewm.data.datasets import TransitionWindowDataset
+from pdewm.utils.wandb import flatten_metrics, init_wandb_run
 
 
 @dataclass(slots=True)
@@ -86,17 +87,69 @@ def train_baseline(cfg: DictConfig) -> dict[str, Any]:
     history: list[dict[str, Any]] = []
     best_val = float("inf")
     best_epoch = 0
+    wandb_run = init_wandb_run(
+        cfg,
+        default_name=f"{cfg.model.name}-{output_dir.name}",
+        default_group=f"baseline::{Path(str(cfg.train.dataset_root)).name}",
+        default_job_type="train_baseline",
+        extra_tags=[str(cfg.model.name), "baseline_1d", str(OmegaConf.select(cfg, "project.phase") or "unknown_phase")],
+    )
 
-    for epoch in range(1, int(cfg.train.epochs) + 1):
-        train_metrics = _run_baseline_epoch(
-            model,
-            train_loader,
-            optimizer,
-            cfg.train.loss_weights,
-            device,
-            training=True,
-        )
-        val_metrics = _run_baseline_epoch(
+    try:
+        for epoch in range(1, int(cfg.train.epochs) + 1):
+            train_metrics = _run_baseline_epoch(
+                model,
+                train_loader,
+                optimizer,
+                cfg.train.loss_weights,
+                device,
+                training=True,
+            )
+            val_metrics = _run_baseline_epoch(
+                model,
+                val_loader,
+                optimizer,
+                cfg.train.loss_weights,
+                device,
+                training=False,
+            )
+            history.append(
+                {
+                    "epoch": epoch,
+                    "train": train_metrics.to_dict(),
+                    "val": val_metrics.to_dict(),
+                }
+            )
+
+            checkpoint = {
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "train_metrics": train_metrics.to_dict(),
+                "val_metrics": val_metrics.to_dict(),
+                "config": OmegaConf.to_container(cfg, resolve=True),
+            }
+            torch.save(checkpoint, output_dir / "last.pt")
+            if val_metrics.loss < best_val:
+                best_val = val_metrics.loss
+                best_epoch = epoch
+                torch.save(checkpoint, output_dir / "best.pt")
+
+            wandb_run.log(
+                {
+                    "epoch": epoch,
+                    **flatten_metrics("train", train_metrics.to_dict()),
+                    **flatten_metrics("val", val_metrics.to_dict()),
+                    "best/val_loss": best_val,
+                    "best/epoch": best_epoch,
+                },
+                step=epoch,
+            )
+
+        best_checkpoint = torch.load(output_dir / "best.pt", map_location=device)
+        model.load_state_dict(best_checkpoint["model_state_dict"])
+        model.to(device)
+        val_best_metrics = _run_baseline_epoch(
             model,
             val_loader,
             optimizer,
@@ -104,57 +157,34 @@ def train_baseline(cfg: DictConfig) -> dict[str, Any]:
             device,
             training=False,
         )
-        history.append(
-            {
-                "epoch": epoch,
-                "train": train_metrics.to_dict(),
-                "val": val_metrics.to_dict(),
-            }
+        test_metrics = _run_baseline_epoch(
+            model,
+            test_loader,
+            optimizer,
+            cfg.train.loss_weights,
+            device,
+            training=False,
         )
 
-        checkpoint = {
-            "epoch": epoch,
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-            "train_metrics": train_metrics.to_dict(),
-            "val_metrics": val_metrics.to_dict(),
-            "config": OmegaConf.to_container(cfg, resolve=True),
+        summary = {
+            "model_name": str(cfg.model.name),
+            "best_epoch": best_epoch,
+            "best_val_loss": best_val,
+            "val_metrics": val_best_metrics.to_dict(),
+            "test_metrics": test_metrics.to_dict(),
         }
-        torch.save(checkpoint, output_dir / "last.pt")
-        if val_metrics.loss < best_val:
-            best_val = val_metrics.loss
-            best_epoch = epoch
-            torch.save(checkpoint, output_dir / "best.pt")
+    finally:
+        history_path = output_dir / "history.json"
+        history_path.write_text(json.dumps(history, indent=2), encoding="utf-8")
+        summary = locals().get("summary", {"model_name": str(cfg.model.name), "best_epoch": best_epoch, "best_val_loss": best_val})
+        summary_path = output_dir / "summary.json"
+        summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        wandb_run.update_summary(flatten_metrics("summary", summary))
+        wandb_run.update_summary({"output_dir": str(output_dir)})
+        wandb_run.save_file(history_path)
+        wandb_run.save_file(summary_path)
+        wandb_run.finish()
 
-    best_checkpoint = torch.load(output_dir / "best.pt", map_location=device)
-    model.load_state_dict(best_checkpoint["model_state_dict"])
-    model.to(device)
-    val_best_metrics = _run_baseline_epoch(
-        model,
-        val_loader,
-        optimizer,
-        cfg.train.loss_weights,
-        device,
-        training=False,
-    )
-    test_metrics = _run_baseline_epoch(
-        model,
-        test_loader,
-        optimizer,
-        cfg.train.loss_weights,
-        device,
-        training=False,
-    )
-
-    summary = {
-        "model_name": str(cfg.model.name),
-        "best_epoch": best_epoch,
-        "best_val_loss": best_val,
-        "val_metrics": val_best_metrics.to_dict(),
-        "test_metrics": test_metrics.to_dict(),
-    }
-    (output_dir / "history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
-    (output_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return summary
 
 

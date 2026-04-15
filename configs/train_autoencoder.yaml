@@ -1,8 +1,10 @@
 defaults:
+  - logging: wandb
   - model: autoencoder_1d
   - train: autoencoder_1d
   - _self_
 
 project:
+  name: pde-world-model
+  phase: sprint2_autoencoder
   seed: 7
-

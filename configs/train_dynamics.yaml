@@ -1,8 +1,10 @@
 defaults:
+  - logging: wandb
   - model: dynamics_1d
   - train: dynamics_1d
   - _self_
 
 project:
+  name: pde-world-model
+  phase: sprint3_dynamics
   seed: 7
-

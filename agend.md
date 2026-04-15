@@ -22,6 +22,8 @@ Mémoire persistante de pilotage. Ce fichier résume où reprendre le travail sa
 - le sprint 4 est livré: baselines 1D directes + runner séquentiel, avec première campagne Burgers déjà exécutée.
 - le sprint 5 heuristique est désormais entamé: active sampling d'états, versioning dataset online, réentraînement du comité, smoke test court validé;
 - un runner long chaîné existe maintenant pour lancer les campagnes longues d'un seul bloc, avec script de lancement en arrière-plan.
+- campagne longue réellement lancée le `2026-04-15` en session PTY persistante `91896`, log courant: `artifacts/launches/long_campaign_tty_20260415_210509.log`.
+- le logging `wandb` est maintenant branché sur les trainers et runners séquentiels; la campagne longue déjà partie avant ce patch n'en bénéficie pas.
 
 ## Règles de conduite du projet
 
@@ -33,6 +35,7 @@ Mémoire persistante de pilotage. Ce fichier résume où reprendre le travail sa
 ## Reprise recommandée au prochain échange
 
 1. vérifier l'état git et le contenu de `IMPLEMENTATION_TRACKER.md`;
-2. surveiller la campagne longue via les logs puis analyser les résultats consolidés;
-3. mettre à jour ce fichier et le tracker après chaque bloc livré;
-4. conserver la discipline commit par commit avec vérification locale avant chaque commit.
+2. surveiller la campagne longue via `artifacts/launches/long_campaign_tty_20260415_210509.log` puis analyser les résultats consolidés;
+3. si une nouvelle campagne longue doit être relancée avec tracking centralisé, utiliser `scripts/run_long_campaign.py --wandb --wandb-mode online`;
+4. mettre à jour ce fichier et le tracker après chaque bloc livré;
+5. conserver la discipline commit par commit avec vérification locale avant chaque commit.
