@@ -11,8 +11,8 @@ import torch
 import zarr
 from torch.utils.data import Dataset
 
-from pdewm.data.schema import TransitionMetadata, TransitionRecord
 from pdewm.data.context_features import DEFAULT_CONTEXT_FEATURES, build_pde_index, metadata_to_context_vector
+from pdewm.data.schema import TransitionMetadata, TransitionRecord
 
 
 @dataclass(slots=True)
@@ -23,6 +23,16 @@ class TransitionArrayBundle:
     solver_runtime_sec: Any
     metadata: list[dict[str, Any]]
     manifest: dict[str, Any]
+
+
+@dataclass(slots=True)
+class TrajectorySample:
+    trajectory_id: str
+    split: str
+    states: np.ndarray
+    pde_ids: np.ndarray
+    continuous_context: np.ndarray
+    metadatas: list[dict[str, Any]]
 
 
 def load_transition_bundle(dataset_root: str | Path) -> TransitionArrayBundle:
@@ -69,6 +79,50 @@ def load_transition_records(dataset_root: str | Path) -> tuple[list[TransitionRe
         )
         records.append(record)
     return records, bundle.manifest
+
+
+def load_trajectory_samples(
+    dataset_root: str | Path,
+    *,
+    splits: tuple[str, ...] = ("val",),
+    context_feature_keys: tuple[str, ...] = DEFAULT_CONTEXT_FEATURES,
+) -> list[TrajectorySample]:
+    bundle = load_transition_bundle(dataset_root)
+    allowed = set(splits)
+    pde_to_index = build_pde_index(metadata["pde_id"] for metadata in bundle.metadata)
+    trajectory_to_entries: dict[str, list[tuple[int, dict[str, Any]]]] = defaultdict(list)
+
+    for index, metadata in enumerate(bundle.metadata):
+        if metadata["split"] in allowed:
+            trajectory_to_entries[metadata["trajectory_id"]].append((index, metadata))
+
+    samples: list[TrajectorySample] = []
+    for trajectory_id, entries in trajectory_to_entries.items():
+        ordered = sorted(entries, key=lambda item: item[1]["time_index"])
+        indices = [index for index, _ in ordered]
+        metadatas = [metadata for _, metadata in ordered]
+        initial_state = np.asarray(bundle.state[indices[0]], dtype=np.float32)
+        future_states = np.asarray(bundle.next_state[indices], dtype=np.float32)
+        states = np.concatenate([initial_state[None, ...], future_states], axis=0)
+        pde_ids = np.asarray(
+            [pde_to_index[metadata["pde_id"]] for metadata in metadatas],
+            dtype=np.int64,
+        )
+        continuous_context = np.stack(
+            [metadata_to_context_vector(metadata, context_feature_keys) for metadata in metadatas],
+            axis=0,
+        ).astype(np.float32)
+        samples.append(
+            TrajectorySample(
+                trajectory_id=trajectory_id,
+                split=str(metadatas[0]["split"]),
+                states=states,
+                pde_ids=pde_ids,
+                continuous_context=continuous_context,
+                metadatas=metadatas,
+            )
+        )
+    return sorted(samples, key=lambda sample: sample.trajectory_id)
 
 
 class StateAutoencoderDataset(Dataset[torch.Tensor]):

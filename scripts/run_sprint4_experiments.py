@@ -123,18 +123,20 @@ def _format_markdown_summary(results: list[dict[str, object]]) -> str:
     lines = [
         "# Sprint 4 Sequential Experiments",
         "",
-        "| Model | Best Val Loss | Test One-Step | Test Rollout |",
+        "| Model | Best Val Loss | Val Rollout NRMSE | Test Rollout NRMSE |",
         "| --- | ---: | ---: | ---: |",
     ]
     for result in results:
-        test_metrics = result["test_metrics"]
-        assert isinstance(test_metrics, dict)
+        trajectory_val_metrics = result["trajectory_val_metrics"]
+        trajectory_test_metrics = result["trajectory_test_metrics"]
+        assert isinstance(trajectory_val_metrics, dict)
+        assert isinstance(trajectory_test_metrics, dict)
         lines.append(
             "| "
             f"{result['model_name']} | "
             f"{float(result['best_val_loss']):.6f} | "
-            f"{float(test_metrics['phys_1step']):.6f} | "
-            f"{float(test_metrics['rollout']):.6f} |"
+            f"{float(trajectory_val_metrics['rollout_nrmse']['mean']):.6f} | "
+            f"{float(trajectory_test_metrics['rollout_nrmse']['mean']):.6f} |"
         )
     lines.append("")
     return "\n".join(lines)

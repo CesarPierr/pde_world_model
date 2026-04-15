@@ -24,6 +24,14 @@ def main() -> None:
     print(f"best_val_loss={summary['best_val_loss']:.6f}")
     print(f"test_one_step={summary['test_metrics']['phys_1step']:.6f}")
     print(f"test_rollout={summary['test_metrics']['rollout']:.6f}")
+    print(
+        "trajectory_val_rollout_nrmse="
+        f"{summary['trajectory_val_metrics']['rollout_nrmse']['mean']:.6f}"
+    )
+    print(
+        "trajectory_test_rollout_nrmse="
+        f"{summary['trajectory_test_metrics']['rollout_nrmse']['mean']:.6f}"
+    )
 
 
 if __name__ == "__main__":

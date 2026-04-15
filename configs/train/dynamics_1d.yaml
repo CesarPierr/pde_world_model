@@ -1,5 +1,7 @@
 dataset_root: data/generated/burgers_1d_offline/v0
 ae_checkpoint: artifacts/runs/autoencoder_1d/best.pt
+resume_checkpoint: null
+regime: frozen
 train_splits: [train]
 val_splits: [val]
 test_splits: [test]
@@ -16,7 +18,10 @@ rollout_horizon: 2
 batch_size: 8
 epochs: 10
 learning_rate: 0.001
+ae_learning_rate: 0.0005
 weight_decay: 0.0
+ae_weight_decay: 0.0
+ae_loss_scale: 1.0
 device: cpu
 num_workers: 0
 output_dir: artifacts/runs/dynamics_1d
@@ -25,3 +30,10 @@ loss_weights:
   phys_1step: 1.0
   rollout: 0.5
   consistency: 0.1
+ae_loss_weights:
+  l1: 1.0
+  l2: 1.0
+  gradient: 0.1
+  spectral: 0.1
+ema:
+  decay: 0.995

@@ -14,7 +14,8 @@ from torch.utils.data import DataLoader
 from pdewm.baselines.common import rollout_state_model
 from pdewm.baselines.factory import build_baseline_model
 from pdewm.baselines.pod_mlp import PODMLPBaseline
-from pdewm.data.datasets import TransitionWindowDataset
+from pdewm.data.datasets import TransitionWindowDataset, load_trajectory_samples
+from pdewm.evaluation.trajectory_metrics import evaluate_state_model_trajectories
 from pdewm.utils.wandb import flatten_metrics, init_wandb_run
 
 
@@ -48,6 +49,14 @@ def train_baseline(cfg: DictConfig) -> dict[str, Any]:
         cfg.train.dataset_root,
         splits=tuple(cfg.train.test_splits),
         rollout_horizon=int(cfg.train.rollout_horizon),
+    )
+    val_trajectories = load_trajectory_samples(
+        cfg.train.dataset_root,
+        splits=tuple(cfg.train.val_splits),
+    )
+    test_trajectories = load_trajectory_samples(
+        cfg.train.dataset_root,
+        splits=tuple(cfg.train.test_splits),
     )
 
     sample = train_dataset[0]
@@ -165,6 +174,16 @@ def train_baseline(cfg: DictConfig) -> dict[str, Any]:
             device,
             training=False,
         )
+        trajectory_val_metrics = evaluate_state_model_trajectories(
+            model,
+            val_trajectories,
+            device=device,
+        )
+        trajectory_test_metrics = evaluate_state_model_trajectories(
+            model,
+            test_trajectories,
+            device=device,
+        )
 
         summary = {
             "model_name": str(cfg.model.name),
@@ -172,6 +191,8 @@ def train_baseline(cfg: DictConfig) -> dict[str, Any]:
             "best_val_loss": best_val,
             "val_metrics": val_best_metrics.to_dict(),
             "test_metrics": test_metrics.to_dict(),
+            "trajectory_val_metrics": trajectory_val_metrics.to_dict(),
+            "trajectory_test_metrics": trajectory_test_metrics.to_dict(),
         }
     finally:
         history_path = output_dir / "history.json"
