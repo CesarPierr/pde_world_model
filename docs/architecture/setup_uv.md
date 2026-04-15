@@ -56,6 +56,17 @@ uv run python scripts/train_autoencoder.py \
   train.batch_size=8
 ```
 
+### Entraînement dynamique 1D
+
+```bash
+uv run python scripts/train_dynamics.py \
+  train.dataset_root=data/generated_local/burgers_1d_offline/local \
+  train.ae_checkpoint=artifacts/runs/ae_local/best.pt \
+  train.output_dir=artifacts/runs/dynamics_local \
+  train.epochs=5 \
+  train.batch_size=8
+```
+
 ## Notes plateforme
 
 - Le dépôt reste compatible avec `uv run` sur macOS CPU pour Burgers/KS 1D.

@@ -1,0 +1,8 @@
+name: dynamics_1d
+hidden_channels: 64
+context_hidden_dim: 64
+context_output_dim: 64
+pde_embedding_dim: 8
+num_blocks: 4
+kernel_size: 5
+

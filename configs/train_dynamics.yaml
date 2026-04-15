@@ -1,0 +1,8 @@
+defaults:
+  - model: dynamics_1d
+  - train: dynamics_1d
+  - _self_
+
+project:
+  seed: 7
+

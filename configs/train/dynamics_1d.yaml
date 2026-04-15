@@ -1,0 +1,26 @@
+dataset_root: data/generated/burgers_1d_offline/v0
+ae_checkpoint: artifacts/runs/autoencoder_1d/best.pt
+train_splits: [train]
+val_splits: [val]
+context_features:
+  - dt
+  - viscosity
+  - ic_amplitude
+  - ic_bandwidth
+  - forcing_amplitude
+  - forcing_mode
+  - domain_length
+  - grid_size
+rollout_horizon: 2
+batch_size: 8
+epochs: 10
+learning_rate: 0.001
+weight_decay: 0.0
+device: cpu
+num_workers: 0
+output_dir: artifacts/runs/dynamics_1d
+loss_weights:
+  latent_1step: 1.0
+  phys_1step: 1.0
+  rollout: 0.5
+  consistency: 0.1
