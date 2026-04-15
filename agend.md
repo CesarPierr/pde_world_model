@@ -16,7 +16,8 @@ Mémoire persistante de pilotage. Ce fichier résume où reprendre le travail sa
 - les fichiers de suivi persistants ont été créés pour éviter de repartir de zéro;
 - le sprint 1 est livré: solveurs 1D, writer dataset, manifests et génération offline validés localement;
 - la gestion de configuration est assurée par un loader `OmegaConf` compatible Hydra, car Hydra casse à l'exécution sous Python 3.14 dans cet environnement;
-- le sprint 2 est livré: AE 1D, losses L1/L2/gradient/spectrale, trainer, tests et smoke train.
+- le sprint 2 est livré: AE 1D, losses L1/L2/gradient/spectrale, trainer, tests et smoke train;
+- le setup `uv` est désormais la voie standard: Python 3.12, `uv.lock`, bootstrap `cpu`/`cuda`, tests et smoke runs déjà validés.
 
 ## Règles de conduite du projet
 

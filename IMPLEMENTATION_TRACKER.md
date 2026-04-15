@@ -14,6 +14,7 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
 | Bloc | Cible | Statut | Notes |
 | --- | --- | --- | --- |
 | Repo scaffold | structure, packaging, conventions, mémoire persistante | done | squelette, packaging, tracker et agenda en place |
+| Environnement uv | Python géré, lockfile, bootstrap CPU/CUDA, doc d'usage | done | `uv` + Python 3.12 + script `bootstrap_uv.sh` + `uv.lock` |
 | Sprint 1 | solveurs 1D + génération dataset + QA | done | Burgers 1D et KS 1D, writer Zarr, manifests, script offline, tests unitaires et smoke tests |
 | Sprint 2 | AE 1D + losses reconstruction | done | AE 1D résiduel, losses L1/L2/gradient/spectrale, trainer, tests et smoke train |
 | Sprint 3 | dynamique latente 1D single-PDE | planned | transition résiduelle conditionnée |
@@ -37,6 +38,7 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
 | config centralisée de type Hydra ou équivalent | `spec_ray_slurm_wandb_architecture.md` | done | loader YAML `OmegaConf` avec overrides `key=value`, choisi pour éviter l'incompatibilité Hydra/Python 3.14 de l'environnement |
 | losses reconstruction L1/L2/gradient/spectrale | `spec_model_and_losses.md` | done | implémentées et testées |
 | surfit court batch AE | `world_model_pde_publication_grade_plan.md` | done | test d'overfit sur petit batch + smoke train sur dataset offline |
+| setup reproductible local et future machine GPU | demande utilisateur | done | workflow `uv` CPU/CUDA documenté et verrouillé via `uv.lock` |
 
 ## Journal synthétique
 
@@ -44,10 +46,12 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
 - dépôt audité: uniquement des documents markdown de cadrage;
 - architecture cible extraite depuis les cinq specs;
 - bootstrap du repo lancé avec mémoire persistante et structure standardisée;
+- setup `uv` ajouté: Python projet 3.12, bootstrap script macOS CPU / Linux CUDA, lockfile généré, docs d'installation;
 - sprint 1 implémenté: contextes PDE, solveurs Burgers/KS 1D, schémas dataset, writer Zarr, script de génération offline;
 - validations effectuées: compilation Python, `pytest tests/unit`, smoke tests de génération offline sur Burgers et KS;
 - sprint 2 implémenté: AE 1D résiduel, losses de reconstruction, dataset torch, trainer et script d'entraînement;
-- validations Sprint 2: `pytest tests/unit tests/integration/test_autoencoder_overfit.py` et smoke train réel sur mini dataset Burgers offline.
+- validations Sprint 2: `pytest tests/unit tests/integration/test_autoencoder_overfit.py` et smoke train réel sur mini dataset Burgers offline;
+- validations `uv`: `uv run pytest -q`, génération offline Burgers via `uv run`, puis entraînement AE réel avec amélioration val d'environ 54%.
 
 ## Prochaines actions fermes
 

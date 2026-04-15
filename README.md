@@ -45,3 +45,12 @@ Le dépôt est initialisé pour une implémentation incrémentale, commit par co
 6. acquisition online;
 7. extension 2D et orchestration distribuée.
 
+## Environnement `uv`
+
+Le dépôt cible un environnement `uv` avec Python `3.12`.
+
+- macOS / CPU: `TORCH_BACKEND=cpu ./scripts/bootstrap_uv.sh`
+- Linux / NVIDIA CUDA 12.4: `TORCH_BACKEND=cu124 ./scripts/bootstrap_uv.sh`
+- tests: `uv run pytest`
+
+La documentation détaillée est dans [docs/architecture/setup_uv.md](/Users/pierre/pde_world_model/docs/architecture/setup_uv.md:1).
