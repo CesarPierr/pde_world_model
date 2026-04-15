@@ -1,0 +1,9 @@
+defaults:
+  - _self_
+
+project:
+  name: pde-world-model
+  phase: bootstrap
+  seed: 7
+  output_dir: artifacts/runs
+
