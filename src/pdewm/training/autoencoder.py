@@ -13,6 +13,7 @@ from torch.utils.data import DataLoader
 from pdewm.data.datasets import StateAutoencoderDataset
 from pdewm.models.representations.autoencoder_1d import Autoencoder1D, Autoencoder1DConfig
 from pdewm.models.representations.losses import AutoencoderLossWeights, compute_autoencoder_losses
+from pdewm.utils.device import resolve_device
 from pdewm.utils.wandb import flatten_metrics, init_wandb_run
 
 
@@ -35,7 +36,7 @@ class EpochMetrics:
 
 
 def train_autoencoder(cfg: DictConfig) -> dict[str, Any]:
-    device = torch.device(str(cfg.train.device))
+    device = resolve_device(str(cfg.train.device))
     model = Autoencoder1D(_build_model_config(cfg.model)).to(device)
     optimizer = torch.optim.Adam(
         model.parameters(),

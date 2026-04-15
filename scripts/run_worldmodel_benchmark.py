@@ -23,6 +23,7 @@ from pdewm.data.datasets import load_transition_records
 from pdewm.data.schema import DatasetManifest, TransitionRecord
 from pdewm.data.writer import OfflineDatasetWriter
 from pdewm.utils.git import get_git_commit_hash
+from pdewm.utils.device import resolve_device
 
 
 DEFAULT_REGIMES = ("frozen", "joint_no_ema", "joint_ema")
@@ -316,7 +317,7 @@ def _run_strategy_benchmark(
         members = load_world_model_committee(
             current_committee_checkpoints,
             str(ae_checkpoint),
-            device="cpu",
+            device=str(resolve_device("auto")),
         )
         records, manifest = load_transition_records(current_dataset_root)
         train_records = [record for record in records if record.metadata.split == "train"]
@@ -745,7 +746,7 @@ def _wandb_overrides(
     tags: list[str],
 ) -> list[str]:
     if not enabled:
-        return []
+        return ["logging.wandb.enabled=false"]
     overrides = [
         "logging.wandb.enabled=true",
         f"logging.wandb.project={project}",

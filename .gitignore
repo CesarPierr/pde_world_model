@@ -25,3 +25,4 @@ data/cache/
 *.ckpt
 *.pt
 *.pth
+tea_debug.log

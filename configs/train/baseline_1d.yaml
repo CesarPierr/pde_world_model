@@ -7,7 +7,7 @@ batch_size: 8
 epochs: 10
 learning_rate: 0.001
 weight_decay: 0.0
-device: cpu
+device: auto
 num_workers: 0
 output_dir: artifacts/runs/baseline_1d
 loss_weights:

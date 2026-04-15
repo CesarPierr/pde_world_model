@@ -1,5 +1,5 @@
 wandb:
-  enabled: false
+  enabled: true
   project: pde-world-model
   entity: null
   mode: online

@@ -22,6 +22,7 @@ from pdewm.models.dynamics.transition_1d import (
 )
 from pdewm.models.representations.autoencoder_1d import Autoencoder1D, Autoencoder1DConfig
 from pdewm.models.representations.losses import AutoencoderLossWeights, compute_autoencoder_losses
+from pdewm.utils.device import resolve_device
 from pdewm.utils.wandb import flatten_metrics, init_wandb_run
 
 
@@ -74,7 +75,7 @@ class WorldModelEpochMetrics:
 
 
 def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
-    device = torch.device(str(cfg.train.device))
+    device = resolve_device(str(cfg.train.device))
     regime = str(OmegaConf.select(cfg, "train.regime") or "frozen")
     if regime not in {"frozen", "joint_no_ema", "joint_ema"}:
         raise ValueError(f"Unsupported training regime: {regime}")
@@ -322,10 +323,10 @@ def load_trained_dynamics(
     checkpoint_path: str | Path,
     ae_checkpoint_path: str | Path | None = None,
     *,
-    device: str | torch.device = "cpu",
+    device: str | torch.device = "auto",
     autoencoder_role: str = "acquisition",
 ) -> tuple[LatentTransitionModel1D, Autoencoder1D, dict[str, Any]]:
-    device = torch.device(device)
+    device = resolve_device(str(device))
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model_cfg = checkpoint["config"]["model"]
     train_cfg = checkpoint["config"]["train"]

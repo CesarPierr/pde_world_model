@@ -19,6 +19,7 @@ from pdewm.data.writer import OfflineDatasetWriter
 from pdewm.solvers.contexts import context_from_metadata
 from pdewm.solvers.factory import build_solver_from_context
 from pdewm.utils.git import get_git_commit_hash
+from pdewm.utils.device import resolve_device
 
 
 def main() -> None:
@@ -172,7 +173,7 @@ def main() -> None:
             members = load_world_model_committee(
                 committee_checkpoints,
                 str(ae_checkpoint),
-                device="cpu",
+                device=str(resolve_device("auto")),
             )
             records, manifest_dict = load_transition_records(current_dataset_root)
             train_records = [record for record in records if record.metadata.split == "train"]
@@ -296,7 +297,7 @@ def _wandb_overrides(
     tags: list[str],
 ) -> list[str]:
     if not enabled:
-        return []
+        return ["logging.wandb.enabled=false"]
     overrides = [
         "logging.wandb.enabled=true",
         f"logging.wandb.project={project}",

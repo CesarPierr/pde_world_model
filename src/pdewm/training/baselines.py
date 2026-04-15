@@ -16,6 +16,7 @@ from pdewm.baselines.factory import build_baseline_model
 from pdewm.baselines.pod_mlp import PODMLPBaseline
 from pdewm.data.datasets import TransitionWindowDataset, load_trajectory_samples
 from pdewm.evaluation.trajectory_metrics import evaluate_state_model_trajectories
+from pdewm.utils.device import resolve_device
 from pdewm.utils.wandb import flatten_metrics, init_wandb_run
 
 
@@ -34,7 +35,7 @@ class BaselineEpochMetrics:
 
 
 def train_baseline(cfg: DictConfig) -> dict[str, Any]:
-    device = torch.device(str(cfg.train.device))
+    device = resolve_device(str(cfg.train.device))
     train_dataset = TransitionWindowDataset(
         cfg.train.dataset_root,
         splits=tuple(cfg.train.train_splits),

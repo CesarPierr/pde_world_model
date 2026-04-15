@@ -25,7 +25,7 @@ def load_world_model_committee(
     checkpoint_paths: list[str],
     ae_checkpoint_path: str | None = None,
     *,
-    device: str = "cpu",
+    device: str = "auto",
 ):
     members = []
     for checkpoint_path in checkpoint_paths:
