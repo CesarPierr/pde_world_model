@@ -13,6 +13,7 @@ __pycache__/
 .env
 wandb/
 artifacts/runs/
+artifacts/launches/
 artifacts/generated/
 data/generated/
 data/generated_*/
