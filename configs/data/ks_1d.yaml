@@ -1,0 +1,21 @@
+dataset_name: ks_1d_offline
+dataset_version: v0
+output_dir: data/generated
+sample_origin: offline
+seed: ${project.seed}
+num_steps: 32
+generation:
+  seed_stride: 1009
+splits:
+  train:
+    num_trajectories: 24
+  val:
+    num_trajectories: 6
+  test:
+    num_trajectories: 6
+  parameter_ood:
+    num_trajectories: 6
+    param_overrides:
+      domain_length_range: [28.0, 32.0]
+      ic_amplitude_range: [1.0, 1.6]
+

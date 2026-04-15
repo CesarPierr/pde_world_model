@@ -13,8 +13,8 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
 
 | Bloc | Cible | Statut | Notes |
 | --- | --- | --- | --- |
-| Repo scaffold | structure, packaging, conventions, mémoire persistante | in_progress | en cours dans le bootstrap initial |
-| Sprint 1 | solveurs 1D + génération dataset + QA | planned | Burgers 1D puis KS 1D |
+| Repo scaffold | structure, packaging, conventions, mémoire persistante | done | squelette, packaging, tracker et agenda en place |
+| Sprint 1 | solveurs 1D + génération dataset + QA | done | Burgers 1D et KS 1D, writer Zarr, manifests, script offline, tests unitaires et smoke tests |
 | Sprint 2 | AE 1D + losses reconstruction | planned | L1/L2/gradient/spectral |
 | Sprint 3 | dynamique latente 1D single-PDE | planned | transition résiduelle conditionnée |
 | Sprint 4 | baselines 1D | planned | CNN AR, U-Net AR, FNO, POD+MLP |
@@ -26,25 +26,28 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
 
 | Exigence | Source | Statut | Notes |
 | --- | --- | --- | --- |
-| structure du repo par responsabilité scientifique | `spec_ray_slurm_wandb_architecture.md` | in_progress | structure créée |
-| suivi persistant de l'avancement | demande utilisateur | in_progress | `IMPLEMENTATION_TRACKER.md` + `agend.md` |
-| progression commit par commit | demande utilisateur | in_progress | stratégie adoptée dès ce cycle |
-| POC 1D avant multi-PDE/2D | `world_model_pde_publication_grade_plan.md` | planned | ordre d'exécution conservé |
+| structure du repo par responsabilité scientifique | `spec_ray_slurm_wandb_architecture.md` | done | structure créée et prête à être remplie par module |
+| suivi persistant de l'avancement | demande utilisateur | done | `IMPLEMENTATION_TRACKER.md` + `agend.md` |
+| progression commit par commit | demande utilisateur | done | bootstrap déjà commité, sprint 1 prêt au commit séparé |
+| POC 1D avant multi-PDE/2D | `world_model_pde_publication_grade_plan.md` | done | ordre d'exécution conservé dans le code et le suivi |
 | AE non conditionné par PDE | `spec_model_and_losses.md` | planned | à respecter dans l'implémentation |
 | dynamique conditionnée par contexte physique | `spec_model_and_losses.md` | planned | à respecter |
 | acquisition initiale en contextual batch bandit | `spec_online_acquisition_and_rl.md` | planned | pas encore codé |
+| solveurs 1D déterministes avec QA | `spec_benchmarks_and_baselines.md` | done | tests solveurs + génération offline validée |
+| config centralisée de type Hydra ou équivalent | `spec_ray_slurm_wandb_architecture.md` | done | loader YAML `OmegaConf` avec overrides `key=value`, choisi pour éviter l'incompatibilité Hydra/Python 3.14 de l'environnement |
 
 ## Journal synthétique
 
 ### 2026-04-15
 - dépôt audité: uniquement des documents markdown de cadrage;
 - architecture cible extraite depuis les cinq specs;
-- bootstrap du repo lancé avec mémoire persistante et structure standardisée.
+- bootstrap du repo lancé avec mémoire persistante et structure standardisée;
+- sprint 1 implémenté: contextes PDE, solveurs Burgers/KS 1D, schémas dataset, writer Zarr, script de génération offline;
+- validations effectuées: compilation Python, `pytest tests/unit`, smoke tests de génération offline sur Burgers et KS.
 
 ## Prochaines actions fermes
 
-1. implémenter l'interface solveur commune et les contextes PDE.
-2. livrer Burgers 1D et KS 1D avec validations de stabilité et reproductibilité.
-3. ajouter writer dataset/manifests et script de génération offline.
-4. démarrer l'AE 1D avec losses de reconstruction.
-
+1. implémenter l'AE 1D avec encodeur/décodeur résiduel et latent grid 1D.
+2. ajouter les losses `L1`, `L2`, gradient et spectrale.
+3. brancher un dataset loader pour entraîner l'AE sur les datasets offline générés.
+4. écrire les tests de surfit court batch et les configs d'entraînement associées.

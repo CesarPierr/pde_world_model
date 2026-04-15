@@ -13,7 +13,9 @@ Mémoire persistante de pilotage. Ce fichier résume où reprendre le travail sa
 - le dépôt contenait uniquement les notes de cadrage;
 - l'ordre d'implémentation retenu suit `world_model_pde_publication_grade_plan.md`, section `10.1`;
 - les benchmarks de départ retenus sont Burgers 1D et KS 1D;
-- les fichiers de suivi persistants ont été créés pour éviter de repartir de zéro.
+- les fichiers de suivi persistants ont été créés pour éviter de repartir de zéro;
+- le sprint 1 est livré: solveurs 1D, writer dataset, manifests et génération offline validés localement;
+- la gestion de configuration est assurée par un loader `OmegaConf` compatible Hydra, car Hydra casse à l'exécution sous Python 3.14 dans cet environnement.
 
 ## Règles de conduite du projet
 
@@ -25,7 +27,6 @@ Mémoire persistante de pilotage. Ce fichier résume où reprendre le travail sa
 ## Reprise recommandée au prochain échange
 
 1. vérifier l'état git et le contenu de `IMPLEMENTATION_TRACKER.md`;
-2. poursuivre le sprint 1 si non terminé;
+2. démarrer directement le sprint 2 sur l'AE 1D;
 3. mettre à jour ce fichier et le tracker après chaque bloc livré;
-4. ne démarrer le sprint suivant qu'après validation locale minimale.
-
+4. conserver la discipline commit par commit avec vérification locale avant chaque commit.

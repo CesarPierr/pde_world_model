@@ -1,0 +1,13 @@
+name: burgers_1d
+pde_id: burgers_1d
+grid_size: 256
+domain_length: 6.283185307179586
+dealias: true
+dt: 0.0025
+parameter_space:
+  viscosity_range: [0.01, 0.08]
+  ic_amplitude_range: [0.5, 1.5]
+  ic_bandwidth_range: [3, 7]
+  forcing_amplitude_range: [0.0, 0.15]
+  forcing_mode_choices: [1, 2, 3]
+

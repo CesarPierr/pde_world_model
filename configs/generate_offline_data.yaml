@@ -1,0 +1,8 @@
+defaults:
+  - data: burgers_1d
+  - solver: burgers_1d
+  - _self_
+
+project:
+  seed: 7
+
