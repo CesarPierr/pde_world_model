@@ -23,7 +23,7 @@ class CandidateState:
 
 def load_world_model_committee(
     checkpoint_paths: list[str],
-    ae_checkpoint_path: str,
+    ae_checkpoint_path: str | None = None,
     *,
     device: str = "cpu",
 ):
@@ -33,6 +33,7 @@ def load_world_model_committee(
             checkpoint_path,
             ae_checkpoint_path,
             device=device,
+            autoencoder_role="acquisition",
         )
         members.append((model, autoencoder, metadata))
     return members
@@ -48,7 +49,7 @@ def build_memory_bank(
     latents = []
     model, autoencoder, metadata = members[0]
     device = next(model.parameters()).device
-    feature_keys = metadata["context_features"]
+    del metadata
 
     for record in selected_records:
         state = torch.from_numpy(record.state).unsqueeze(0).to(device)
@@ -131,6 +132,46 @@ def select_diverse_candidates(
     return selected
 
 
+def rank_candidates(
+    candidates: list[CandidateState],
+    *,
+    strategy: str,
+    top_m: int,
+    diversity_lambda: float,
+    seed: int,
+) -> list[CandidateState]:
+    if strategy == "offline_only":
+        return []
+    if strategy == "random_states":
+        rng = np.random.default_rng(seed)
+        ranked = list(candidates)
+        rng.shuffle(ranked)
+        return ranked
+    if strategy == "uncertainty_only":
+        return sorted(candidates, key=lambda item: (item.uncertainty, -item.risk), reverse=True)
+    if strategy == "diversity_only":
+        return _greedy_diverse_ranking(
+            candidates,
+            base_score=lambda candidate: candidate.novelty - candidate.risk,
+            diversity_lambda=diversity_lambda,
+        )
+    if strategy == "uncertainty_diversity":
+        ranked = sorted(candidates, key=lambda item: item.uncertainty, reverse=True)[:top_m]
+        return _greedy_diverse_ranking(
+            ranked,
+            base_score=lambda candidate: candidate.uncertainty,
+            diversity_lambda=diversity_lambda,
+        )
+    if strategy == "ours":
+        ranked = sorted(candidates, key=lambda item: item.score, reverse=True)[:top_m]
+        return _greedy_diverse_ranking(
+            ranked,
+            base_score=lambda candidate: candidate.score,
+            diversity_lambda=diversity_lambda,
+        )
+    raise ValueError(f"Unsupported acquisition strategy: {strategy}")
+
+
 def _encode_candidate_summary(candidate_state: np.ndarray, members) -> np.ndarray:
     model, autoencoder, metadata = members[0]
     del model, metadata
@@ -165,3 +206,31 @@ def _novelty_score(latent_summary: np.ndarray, memory_latents: np.ndarray) -> fl
 
 def _latent_summary(latent: torch.Tensor) -> np.ndarray:
     return latent.detach().cpu().reshape(-1).numpy().astype(np.float32)
+
+
+def _greedy_diverse_ranking(
+    candidates: list[CandidateState],
+    *,
+    base_score,
+    diversity_lambda: float,
+) -> list[CandidateState]:
+    pool = list(candidates)
+    if not pool:
+        return []
+
+    pool.sort(key=base_score, reverse=True)
+    ordered = [pool.pop(0)]
+    while pool:
+        best_index = 0
+        best_value = float("-inf")
+        for index, candidate in enumerate(pool):
+            distance = min(
+                float(np.linalg.norm(candidate.latent_summary - existing.latent_summary))
+                for existing in ordered
+            )
+            value = float(base_score(candidate)) + diversity_lambda * distance
+            if value > best_value:
+                best_value = value
+                best_index = index
+        ordered.append(pool.pop(best_index))
+    return ordered

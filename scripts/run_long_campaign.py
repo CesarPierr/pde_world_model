@@ -12,11 +12,13 @@ def main() -> None:
     parser.add_argument("--ae-epochs", type=int, default=120)
     parser.add_argument("--dynamics-epochs", type=int, default=120)
     parser.add_argument("--fine-tune-epochs", type=int, default=100)
-    parser.add_argument("--online-iters", type=int, default=3)
+    parser.add_argument("--online-solver-transitions", type=int, default=192)
+    parser.add_argument("--transitions-per-round", type=int, default=64)
+    parser.add_argument("--rollout-horizon", type=int, default=8)
     parser.add_argument("--ensemble-size", type=int, default=3)
     parser.add_argument("--run-burgers-baselines", action="store_true")
     parser.add_argument("--run-ks-baselines", action="store_true")
-    parser.add_argument("--run-worldmodel-active", action="store_true")
+    parser.add_argument("--run-worldmodel-benchmark", action="store_true")
     parser.add_argument("--prepare-data", action="store_true")
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--wandb-project", default="pde-world-model")
@@ -25,7 +27,9 @@ def main() -> None:
     parser.add_argument("--wandb-group", default="")
     args = parser.parse_args()
 
-    run_all = not (args.run_burgers_baselines or args.run_ks_baselines or args.run_worldmodel_active)
+    run_all = not (
+        args.run_burgers_baselines or args.run_ks_baselines or args.run_worldmodel_benchmark
+    )
     wandb_args = _wandb_args(
         enabled=args.wandb,
         project=args.wandb_project,
@@ -79,13 +83,12 @@ def main() -> None:
                 *wandb_args,
             ]
         )
-    if args.run_worldmodel_active or run_all:
+    if args.run_worldmodel_benchmark or run_all:
         _run(
             [
                 sys.executable,
-                "scripts/run_worldmodel_active_sampling.py",
+                "scripts/run_worldmodel_benchmark.py",
                 "--prepare-data" if args.prepare_data else "",
-                "--prepare-ae",
                 "--data-config",
                 "burgers_1d",
                 "--solver-config",
@@ -93,7 +96,7 @@ def main() -> None:
                 "--dataset-root",
                 "data/generated_long_worldmodel/burgers_1d_offline/long_worldmodel",
                 "--output-root",
-                "artifacts/runs/long_worldmodel_active",
+                "artifacts/runs/long_worldmodel_benchmark",
                 "--data-version",
                 "long_worldmodel",
                 "--ae-epochs",
@@ -102,8 +105,12 @@ def main() -> None:
                 str(args.dynamics_epochs),
                 "--fine-tune-epochs",
                 str(args.fine_tune_epochs),
-                "--online-iters",
-                str(args.online_iters),
+                "--online-solver-transitions",
+                str(args.online_solver_transitions),
+                "--transitions-per-round",
+                str(args.transitions_per_round),
+                "--rollout-horizon",
+                str(args.rollout_horizon),
                 "--ensemble-size",
                 str(args.ensemble_size),
                 *wandb_args,
