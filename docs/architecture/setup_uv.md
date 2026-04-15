@@ -67,6 +67,18 @@ uv run python scripts/train_dynamics.py \
   train.batch_size=8
 ```
 
+Mode joint avec EMA:
+
+```bash
+uv run python scripts/train_dynamics.py \
+  train.dataset_root=data/generated_local/burgers_1d_offline/local \
+  train.ae_checkpoint=artifacts/runs/ae_local/best.pt \
+  train.output_dir=artifacts/runs/dynamics_joint_local \
+  train.regime=joint_ema \
+  train.epochs=5 \
+  train.batch_size=8
+```
+
 ### Campagne séquentielle Sprint 4
 
 ```bash
@@ -125,7 +137,10 @@ Par défaut, la campagne longue enchaîne:
 
 - baselines Burgers 1D longues;
 - baselines KS 1D longues;
-- world model Burgers 1D long avec acquisition online par active sampling d'états.
+- benchmark world model Burgers 1D long avec:
+  - ablation `frozen / joint_no_ema / joint_ema`;
+  - budget online fixé en transitions solveur;
+  - stratégies `offline_only`, `random_states`, `uncertainty_only`, `diversity_only`, `uncertainty_diversity`, `ours`.
 
 Les defaults actuels sont:
 
@@ -133,12 +148,38 @@ Les defaults actuels sont:
 - `ae_epochs=120`
 - `dynamics_epochs=120`
 - `fine_tune_epochs=100`
-- `online_iters=3`
+- `online_solver_transitions=192`
+- `transitions_per_round=64`
+- `rollout_horizon=8`
 - `ensemble_size=3`
 
 Le logging `wandb` est optionnel et transite par les trainers `autoencoder`, `baseline` et `dynamics`.
 Les runners séquentiels propagent `project/entity/mode/group/name/tags` vers les sous-runs.
 Pour une validation locale sans réseau, utiliser `--wandb-mode offline`.
+
+### Benchmark world model corrigé
+
+Le runner de référence pour le protocole world model est maintenant:
+
+```bash
+uv run python scripts/run_worldmodel_benchmark.py \
+  --dataset-root data/generated_sprint4/burgers_1d_offline/sprint4 \
+  --output-root artifacts/runs/worldmodel_protocol \
+  --ae-epochs 10 \
+  --dynamics-epochs 20 \
+  --fine-tune-epochs 10 \
+  --online-solver-transitions 128 \
+  --transitions-per-round 64 \
+  --rollout-horizon 8
+```
+
+Ce runner produit:
+
+- une ablation `frozen / joint_no_ema / joint_ema`;
+- une sélection du régime principal;
+- un benchmark d'acquisition à budget online fixe en transitions solveur;
+- des métriques trajectoire communes `one-step` et `rollout` avec `RMSE`, `NRMSE` et quantiles;
+- des courbes `performance vs online_solver_transitions` et `performance vs total_transitions`.
 
 ## Notes plateforme
 

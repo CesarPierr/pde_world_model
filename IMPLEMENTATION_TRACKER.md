@@ -19,7 +19,7 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
 | Sprint 2 | AE 1D + losses reconstruction | done | AE 1D résiduel, losses L1/L2/gradient/spectrale, trainer, tests et smoke train |
 | Sprint 3 | dynamique latente 1D single-PDE | done | dataset de fenêtres, encodeur contexte physique, transition FiLM, trainer, tests et smoke train réel |
 | Sprint 4 | baselines 1D | done | CNN AR, U-Net AR, FNO 1D et POD+MLP, trainer commun, runner séquentiel, campagne Burgers 1D lancée |
-| Sprint 5 | acquisition online 1D | in_progress | boucle heuristique memory-bank + uncertainty + novelty + risk + réentraînement de comité, smoke test validé |
+| Sprint 5 | acquisition online 1D | in_progress | protocole corrigé implémenté: budget en transitions solveur, ablation `frozen/joint_no_ema/joint_ema`, acquisitions `offline/random/uncertainty/diversity/uncertainty+diversity/ours`, courbes automatiques |
 | Sprint 6 | multi-paramètre / multi-PDE 1D | planned | shared latent + invariance |
 | Sprint 7+ | extension 2D et orchestration distribuée | planned | diffusion-reaction puis NS |
 
@@ -41,6 +41,9 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
 | setup reproductible local et future machine GPU | demande utilisateur | done | workflow `uv` CPU/CUDA documenté et verrouillé via `uv.lock` |
 | baselines 1D comparables sous protocole commun | `spec_benchmarks_and_baselines.md` | done | CNN AR, U-Net AR, FNO 1D, POD+MLP, même dataset et même horizon de rollout |
 | suivi d'expériences et métriques avec wandb | `spec_ray_slurm_wandb_architecture.md` + demande utilisateur | done | instrumentation `wandb` optionnelle branchée dans `train_autoencoder.py`, `train_baseline.py`, `train_dynamics.py` et propagée dans les runners séquentiels |
+| métriques communes sur trajectoires de validation | demande utilisateur + protocole corrigé | done | val/test trajectoires partagées, `one-step` et `rollout`, `RMSE/NRMSE`, quantiles `q50/q90/q95/q99/max` dans les summaries |
+| budget d'acquisition fixé en transitions solveur | demande utilisateur + protocole corrigé | done | unité `1 transition = (state,next_state)`, budget online distinct du dataset offline, comptage exact et pertes de transitions journalisées |
+| joint training AE+dynamics avec EMA | demande utilisateur + `spec_model_and_losses.md` | done | régimes `frozen`, `joint_no_ema`, `joint_ema`, checkpoints `student/EMA`, reprise de training supportée |
 
 ## Journal synthétique
 
@@ -65,10 +68,16 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
 - sprint 5 initial implémenté: acquisition heuristique en espace d'états/latent, enrichissement dataset versionné, réentraînement séquentiel d'un comité de dynamique;
 - validations Sprint 5: smoke test court `run_worldmodel_active_sampling.py` sur Burgers 1D avec 1 itération online, 2 membres d'ensemble, 12 nouveaux samples acquis et réentraînement réussi.
 - logging `wandb` ajouté: dépendance projet, wrapper optionnel, logs epoch/final summary, groupage via runners longs et smoke run local validé en mode `offline`.
+- protocole world model corrigé implémenté:
+  - `train_dynamics.py` supporte `frozen`, `joint_no_ema`, `joint_ema`;
+  - les summaries world model et baseline incluent maintenant des métriques trajectoire partagées;
+  - nouveau runner `run_worldmodel_benchmark.py` avec ablation des régimes, sélection du régime, benchmark des stratégies d'acquisition à budget en transitions solveur et génération automatique des courbes;
+  - smoke benchmark validé sur `artifacts/runs/protocol_smoke`.
 
 ## Prochaines actions fermes
 
-1. laisser tourner la campagne longue chaînée et revenir sur les logs/résumés.
-2. ajouter une comparaison explicite `baselines longues vs world model long vs world model + active sampling`.
-3. durcir Sprint 5 avec un crash predictor dédié et une policy apprise si le gain heuristique est confirmé.
-4. étendre la même logique à `ks_1d`.
+1. relancer une campagne longue avec le nouveau `run_worldmodel_benchmark.py` au lieu du runner exploratoire historique.
+2. exécuter l'ablation complète `frozen vs joint_no_ema vs joint_ema` sur plusieurs seeds et budgets plus longs.
+3. comparer proprement `offline_only/random/uncertainty/diversity/uncertainty+diversity/ours` à budget online identique en transitions solveur.
+4. durcir Sprint 5 avec un crash predictor dédié et une policy apprise si le gain heuristique est confirmé.
+5. étendre la même logique à `ks_1d`.

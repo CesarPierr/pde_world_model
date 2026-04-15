@@ -21,9 +21,15 @@ Mémoire persistante de pilotage. Ce fichier résume où reprendre le travail sa
 - le sprint 3 est livré: dynamique latente 1D conditionnée par contexte physique, avec trainer et smoke train réel sur Burgers;
 - le sprint 4 est livré: baselines 1D directes + runner séquentiel, avec première campagne Burgers déjà exécutée.
 - le sprint 5 heuristique est désormais entamé: active sampling d'états, versioning dataset online, réentraînement du comité, smoke test court validé;
+- le protocole corrigé est maintenant codé:
+  - régimes `frozen`, `joint_no_ema`, `joint_ema` dans `train_dynamics.py`;
+  - `EMA` sur l'AE pour la cible latente et l'acquisition en mode `joint_ema`;
+  - métriques trajectoire communes val/test avec `RMSE`, `NRMSE` et quantiles;
+  - nouveau runner `scripts/run_worldmodel_benchmark.py` à budget online en transitions solveur;
 - un runner long chaîné existe maintenant pour lancer les campagnes longues d'un seul bloc, avec script de lancement en arrière-plan.
 - campagne longue réellement lancée le `2026-04-15` en session PTY persistante `91896`, log courant: `artifacts/launches/long_campaign_tty_20260415_210509.log`.
 - le logging `wandb` est maintenant branché sur les trainers et runners séquentiels; la campagne longue déjà partie avant ce patch n'en bénéficie pas.
+- smoke benchmark protocolaire validé dans `artifacts/runs/protocol_smoke`.
 
 ## Règles de conduite du projet
 
@@ -35,7 +41,8 @@ Mémoire persistante de pilotage. Ce fichier résume où reprendre le travail sa
 ## Reprise recommandée au prochain échange
 
 1. vérifier l'état git et le contenu de `IMPLEMENTATION_TRACKER.md`;
-2. surveiller la campagne longue via `artifacts/launches/long_campaign_tty_20260415_210509.log` puis analyser les résultats consolidés;
-3. si une nouvelle campagne longue doit être relancée avec tracking centralisé, utiliser `scripts/run_long_campaign.py --wandb --wandb-mode online`;
-4. mettre à jour ce fichier et le tracker après chaque bloc livré;
-5. conserver la discipline commit par commit avec vérification locale avant chaque commit.
+2. considérer la campagne longue `91896` comme exploration historique sous ancien protocole;
+3. pour toute nouvelle campagne de référence, utiliser `scripts/run_worldmodel_benchmark.py` ou `scripts/run_long_campaign.py` mis à jour;
+4. relancer un benchmark long multi-seeds avec budget en transitions solveur et suivre les courbes générées;
+5. mettre à jour ce fichier et le tracker après chaque bloc livré;
+6. conserver la discipline commit par commit avec vérification locale avant chaque commit.
