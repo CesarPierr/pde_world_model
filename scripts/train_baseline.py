@@ -21,16 +21,13 @@ def main() -> None:
     seed_everything(int(cfg.project.seed))
     summary = train_baseline(cfg)
     print(f"model={summary['model_name']}")
-    print(f"best_val_loss={summary['best_val_loss']:.6f}")
-    print(f"test_one_step={summary['test_metrics']['phys_1step']:.6f}")
-    print(f"test_rollout={summary['test_metrics']['rollout']:.6f}")
+    print(f"final_epoch={summary['final_epoch']}")
+    print(f"final_eval_loss={summary['final_eval_loss']:.6f}")
+    print(f"eval_one_step={summary['eval_metrics']['phys_1step']:.6f}")
+    print(f"eval_rollout={summary['eval_metrics']['rollout']:.6f}")
     print(
-        "trajectory_val_rollout_nrmse="
-        f"{summary['trajectory_val_metrics']['rollout_nrmse']['mean']:.6f}"
-    )
-    print(
-        "trajectory_test_rollout_nrmse="
-        f"{summary['trajectory_test_metrics']['rollout_nrmse']['mean']:.6f}"
+        "trajectory_eval_rollout_nrmse="
+        f"{summary['trajectory_eval_metrics']['rollout_nrmse']['mean']:.6f}"
     )
 
 

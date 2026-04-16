@@ -23,6 +23,7 @@ from pdewm.data.schema import DatasetManifest, TransitionRecord
 from pdewm.data.writer import OfflineDatasetWriter
 from pdewm.utils.device import resolve_device
 from pdewm.utils.git import get_git_commit_hash
+from pdewm.utils.wandb import compose_wandb_group, compose_wandb_name
 
 # ---------------------------------------------------------------------------
 # Challenging benchmark — designed for RTX 2070 Super (8 GB VRAM),
@@ -30,7 +31,7 @@ from pdewm.utils.git import get_git_commit_hash
 #
 # Key differences vs the basic benchmark:
 #   • Resolution  : 256 grid points (not 64)
-#   • Data        : 64 train / 12 val / 12 test / 12 OOD trajectories, 48 time steps
+#   • Data        : 64 train / 12 eval / 12 OOD trajectories, 48 time steps
 #   • Models      : base_channels=32, latent_channels=64, channel_mults=[1,2,4,8]
 #                   dynamics hidden=64, context=64, 4 blocks
 #   • Ensemble    : 5 members (not 3)
@@ -72,8 +73,7 @@ def main() -> None:
     parser.add_argument("--grid-size", type=int, default=256)
     parser.add_argument("--num-steps", type=int, default=48)
     parser.add_argument("--train-trajectories", type=int, default=64)
-    parser.add_argument("--val-trajectories", type=int, default=12)
-    parser.add_argument("--test-trajectories", type=int, default=12)
+    parser.add_argument("--eval-trajectories", type=int, default=12)
     parser.add_argument("--ood-trajectories", type=int, default=12)
 
     # --- Model capacity (AE) -------------------------------------------------
@@ -143,8 +143,7 @@ def main() -> None:
                     f"data.dataset_version={args.data_version}",
                     f"data.output_dir={args.data_root}",
                     f"data.splits.train.num_trajectories={args.train_trajectories}",
-                    f"data.splits.val.num_trajectories={args.val_trajectories}",
-                    f"data.splits.test.num_trajectories={args.test_trajectories}",
+                    f"data.splits.test.num_trajectories={args.eval_trajectories}",
                     f"data.splits.parameter_ood.num_trajectories={args.ood_trajectories}",
                     f"data.num_steps={args.num_steps}",
                     f"solver.grid_size={args.grid_size}",
@@ -153,7 +152,7 @@ def main() -> None:
 
             # --- Autoencoder warm-up ---
             ae_dir = pde_output / "warmup_autoencoder"
-            ae_checkpoint = ae_dir / "best.pt"
+            ae_checkpoint = ae_dir / "last.pt"
             if args.prepare_ae or not ae_checkpoint.exists():
                 ae_cmd = [
                     sys.executable, "scripts/train_autoencoder.py",
@@ -169,8 +168,18 @@ def main() -> None:
                 ae_cmd.extend(_wandb_overrides(
                     enabled=args.wandb, project=args.wandb_project, entity=args.wandb_entity,
                     mode=args.wandb_mode,
-                    group=args.wandb_group or f"challenging_{args.data_version}",
-                    name=f"{pde_seed_tag}_warmup_ae",
+                    group=args.wandb_group or compose_wandb_group(
+                        "challenging-benchmark",
+                        args.data_version,
+                        pde_id,
+                        "warmup-autoencoder",
+                    ),
+                    name=compose_wandb_name(
+                        "challenging benchmark",
+                        pde_id,
+                        "warmup autoencoder",
+                        f"seed {seed}",
+                    ),
                     tags=["challenging_benchmark", pde_id, "warmup_ae", f"seed_{seed}"],
                 ))
                 _run(ae_cmd)
@@ -323,13 +332,26 @@ def _run_regime_ablation(
                 project=wandb_args.wandb_project,
                 entity=wandb_args.wandb_entity,
                 mode=wandb_args.wandb_mode,
-                group=wandb_args.wandb_group or f"challenging_{pde_id}_regime",
-                name=f"{pde_id}_s{seed}_{regime}_m{member_index:02d}",
+                group=wandb_args.wandb_group or compose_wandb_group(
+                    "challenging-benchmark",
+                    wandb_args.data_version,
+                    pde_id,
+                    "regime-ablation",
+                    regime,
+                ),
+                name=compose_wandb_name(
+                    "challenging benchmark",
+                    pde_id,
+                    "regime ablation",
+                    regime,
+                    f"seed {seed + member_index}",
+                    f"member {member_index:02d}",
+                ),
                 tags=["challenging_benchmark", pde_id, "regime_ablation", regime, f"seed_{seed}"],
             ))
             _run(command)
         member_summaries.append(json.loads(member_summary_path.read_text(encoding="utf-8")))
-        member_checkpoints.append(str(member_dir / "best.pt"))
+        member_checkpoints.append(str(member_dir / "last.pt"))
 
     result = {
         "regime": regime,
@@ -548,13 +570,26 @@ def _fine_tune_committee(
                 project=wandb_args.wandb_project,
                 entity=wandb_args.wandb_entity,
                 mode=wandb_args.wandb_mode,
-                group=wandb_args.wandb_group or f"challenging_{pde_id}_{strategy}",
-                name=f"{pde_id}_{strategy}_r{round_index:02d}_m{member_index:02d}",
+                group=wandb_args.wandb_group or compose_wandb_group(
+                    "challenging-benchmark",
+                    wandb_args.data_version,
+                    pde_id,
+                    "acquisition",
+                    strategy,
+                ),
+                name=compose_wandb_name(
+                    "challenging benchmark",
+                    pde_id,
+                    strategy,
+                    f"round {round_index:02d}",
+                    f"seed {seed + member_index}",
+                    f"member {member_index:02d}",
+                ),
                 tags=["challenging_benchmark", pde_id, "acquisition_benchmark", strategy, regime],
             ))
             _run(command)
         member_summaries.append(json.loads(member_summary_path.read_text(encoding="utf-8")))
-        member_checkpoints.append(str(member_dir / "best.pt"))
+        member_checkpoints.append(str(member_dir / "last.pt"))
 
     return {
         "aggregate": _aggregate_ensemble_summaries(member_summaries),
@@ -569,25 +604,16 @@ def _fine_tune_committee(
 
 def _aggregate_ensemble_summaries(member_summaries: list[dict[str, Any]]) -> dict[str, float]:
     return {
-        "best_val_loss_mean": _mean_nested(member_summaries, ("best_val_loss",)),
-        "ae_val_loss_mean": _mean_nested(member_summaries, ("ae_val_metrics", "loss")),
-        "ae_test_loss_mean": _mean_nested(member_summaries, ("ae_test_metrics", "loss")),
-        "trajectory_val_one_step_rmse_mean": _mean_nested(
-            member_summaries, ("trajectory_val_metrics", "one_step_rmse", "mean")),
-        "trajectory_val_one_step_nrmse_mean": _mean_nested(
-            member_summaries, ("trajectory_val_metrics", "one_step_nrmse", "mean")),
-        "trajectory_val_rollout_rmse_mean": _mean_nested(
-            member_summaries, ("trajectory_val_metrics", "rollout_rmse", "mean")),
-        "trajectory_val_rollout_nrmse_mean": _mean_nested(
-            member_summaries, ("trajectory_val_metrics", "rollout_nrmse", "mean")),
-        "trajectory_test_one_step_rmse_mean": _mean_nested(
-            member_summaries, ("trajectory_test_metrics", "one_step_rmse", "mean")),
-        "trajectory_test_one_step_nrmse_mean": _mean_nested(
-            member_summaries, ("trajectory_test_metrics", "one_step_nrmse", "mean")),
-        "trajectory_test_rollout_rmse_mean": _mean_nested(
-            member_summaries, ("trajectory_test_metrics", "rollout_rmse", "mean")),
-        "trajectory_test_rollout_nrmse_mean": _mean_nested(
-            member_summaries, ("trajectory_test_metrics", "rollout_nrmse", "mean")),
+        "final_eval_loss_mean": _mean_nested(member_summaries, ("final_eval_loss",)),
+        "ae_eval_loss_mean": _mean_nested(member_summaries, ("ae_eval_metrics", "loss")),
+        "trajectory_eval_one_step_rmse_mean": _mean_nested(
+            member_summaries, ("trajectory_eval_metrics", "one_step_rmse", "mean")),
+        "trajectory_eval_one_step_nrmse_mean": _mean_nested(
+            member_summaries, ("trajectory_eval_metrics", "one_step_nrmse", "mean")),
+        "trajectory_eval_rollout_rmse_mean": _mean_nested(
+            member_summaries, ("trajectory_eval_metrics", "rollout_rmse", "mean")),
+        "trajectory_eval_rollout_nrmse_mean": _mean_nested(
+            member_summaries, ("trajectory_eval_metrics", "rollout_nrmse", "mean")),
     }
 
 
@@ -598,14 +624,14 @@ def _select_regime(
         if preferred not in regime_results:
             raise ValueError(f"Requested regime {preferred!r} is not available.")
         return preferred
-    ae_floor = min(r["aggregate"]["ae_val_loss_mean"] for r in regime_results.values())
+    ae_floor = min(r["aggregate"]["ae_eval_loss_mean"] for r in regime_results.values())
     rollout_floor = min(
-        r["aggregate"]["trajectory_val_rollout_nrmse_mean"] for r in regime_results.values()
+        r["aggregate"]["trajectory_eval_rollout_nrmse_mean"] for r in regime_results.values()
     )
     best_regime, best_score = "", float("inf")
     for regime, result in regime_results.items():
-        ae_ratio = result["aggregate"]["ae_val_loss_mean"] / max(ae_floor, 1e-8)
-        rollout_ratio = result["aggregate"]["trajectory_val_rollout_nrmse_mean"] / max(rollout_floor, 1e-8)
+        ae_ratio = result["aggregate"]["ae_eval_loss_mean"] / max(ae_floor, 1e-8)
+        rollout_ratio = result["aggregate"]["trajectory_eval_rollout_nrmse_mean"] / max(rollout_floor, 1e-8)
         score = ae_ratio * rollout_ratio
         result["aggregate"]["selection_score"] = score
         if score < best_score:
@@ -623,14 +649,10 @@ def _curve_point(
         "round_index": round_index,
         "online_solver_transitions": int(online_solver_transitions),
         "total_transitions": int(offline_transitions + online_solver_transitions),
-        "trajectory_val_one_step_rmse_mean": float(aggregate["trajectory_val_one_step_rmse_mean"]),
-        "trajectory_val_one_step_nrmse_mean": float(aggregate["trajectory_val_one_step_nrmse_mean"]),
-        "trajectory_val_rollout_rmse_mean": float(aggregate["trajectory_val_rollout_rmse_mean"]),
-        "trajectory_val_rollout_nrmse_mean": float(aggregate["trajectory_val_rollout_nrmse_mean"]),
-        "trajectory_test_one_step_rmse_mean": float(aggregate["trajectory_test_one_step_rmse_mean"]),
-        "trajectory_test_one_step_nrmse_mean": float(aggregate["trajectory_test_one_step_nrmse_mean"]),
-        "trajectory_test_rollout_rmse_mean": float(aggregate["trajectory_test_rollout_rmse_mean"]),
-        "trajectory_test_rollout_nrmse_mean": float(aggregate["trajectory_test_rollout_nrmse_mean"]),
+        "trajectory_eval_one_step_rmse_mean": float(aggregate["trajectory_eval_one_step_rmse_mean"]),
+        "trajectory_eval_one_step_nrmse_mean": float(aggregate["trajectory_eval_one_step_nrmse_mean"]),
+        "trajectory_eval_rollout_rmse_mean": float(aggregate["trajectory_eval_rollout_rmse_mean"]),
+        "trajectory_eval_rollout_nrmse_mean": float(aggregate["trajectory_eval_rollout_nrmse_mean"]),
     }
 
 
@@ -688,15 +710,14 @@ def _write_extended_dataset(
 def _plot_strategy_curves(strategy_results: dict[str, dict[str, Any]], output_root: Path) -> None:
     output_root.mkdir(parents=True, exist_ok=True)
     for x_key, title_suffix in [("online_solver_transitions", "Online"), ("total_transitions", "Total")]:
-        for split, split_label in [("val", "Validation"), ("test", "Test")]:
-            _plot_metric_group(
-                strategy_results,
-                output_root / f"{split}_nrmse_vs_{x_key}.png",
-                x_key=x_key,
-                one_step_key=f"trajectory_{split}_one_step_nrmse_mean",
-                rollout_key=f"trajectory_{split}_rollout_nrmse_mean",
-                title_prefix=f"{split_label} NRMSE vs {title_suffix} Transitions",
-            )
+        _plot_metric_group(
+            strategy_results,
+            output_root / f"eval_nrmse_vs_{x_key}.png",
+            x_key=x_key,
+            one_step_key="trajectory_eval_one_step_nrmse_mean",
+            rollout_key="trajectory_eval_rollout_nrmse_mean",
+            title_prefix=f"Eval NRMSE vs {title_suffix} Transitions",
+        )
 
 
 def _plot_metric_group(
@@ -728,8 +749,8 @@ def _plot_metric_group(
 def _format_regime_summary(summary: dict[str, Any]) -> str:
     lines = [
         "# Regime Ablation", "",
-        "| Regime | Selection Score | AE Val Loss | Val Rollout NRMSE | Test Rollout NRMSE |",
-        "| --- | ---: | ---: | ---: | ---: |",
+        "| Regime | Selection Score | AE Eval Loss | Eval Rollout NRMSE |",
+        "| --- | ---: | ---: | ---: |",
     ]
     selected = str(summary["selected_regime"])
     for regime, result in summary["regimes"].items():
@@ -737,9 +758,8 @@ def _format_regime_summary(summary: dict[str, Any]) -> str:
         marker = " <- selected" if regime == selected else ""
         lines.append(
             f"| {regime}{marker} | {float(a.get('selection_score', 0)):.6f} | "
-            f"{float(a['ae_val_loss_mean']):.6f} | "
-            f"{float(a['trajectory_val_rollout_nrmse_mean']):.6f} | "
-            f"{float(a['trajectory_test_rollout_nrmse_mean']):.6f} |"
+            f"{float(a['ae_eval_loss_mean']):.6f} | "
+            f"{float(a['trajectory_eval_rollout_nrmse_mean']):.6f} |"
         )
     lines.append("")
     return "\n".join(lines)
@@ -751,15 +771,14 @@ def _format_benchmark_summary(summary: dict[str, Any]) -> str:
         f"- selected regime: `{summary['selected_regime']}`",
         f"- offline transitions: `{summary['offline_transitions']}`",
         f"- online transition budget: `{summary['online_solver_transition_budget']}`", "",
-        "| Strategy | Online Transitions | Val Rollout NRMSE | Test Rollout NRMSE |",
-        "| --- | ---: | ---: | ---: |",
+        "| Strategy | Online Transitions | Eval Rollout NRMSE |",
+        "| --- | ---: | ---: |",
     ]
     for strategy, result in summary["strategy_results"].items():
         final = result["curve"][-1]
         lines.append(
             f"| {strategy} | {int(result['online_solver_transitions'])} | "
-            f"{float(final['trajectory_val_rollout_nrmse_mean']):.6f} | "
-            f"{float(final['trajectory_test_rollout_nrmse_mean']):.6f} |"
+            f"{float(final['trajectory_eval_rollout_nrmse_mean']):.6f} |"
         )
     lines.append("")
     return "\n".join(lines)
@@ -774,10 +793,8 @@ def _write_global_summary(all_results: dict[str, dict[str, Any]], output_root: P
         for strategy, sresult in result["strategy_results"].items():
             final = sresult["curve"][-1]
             lines.append(
-                f"  - **{strategy}**: val rollout NRMSE "
-                f"{float(final['trajectory_val_rollout_nrmse_mean']):.6f}, "
-                f"test rollout NRMSE "
-                f"{float(final['trajectory_test_rollout_nrmse_mean']):.6f}"
+                f"  - **{strategy}**: eval rollout NRMSE "
+                f"{float(final['trajectory_eval_rollout_nrmse_mean']):.6f}"
             )
         lines.append("")
     (output_root / "global_summary.md").write_text("\n".join(lines), encoding="utf-8")

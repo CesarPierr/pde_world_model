@@ -15,20 +15,32 @@ from pdewm.baselines.common import rollout_state_model
 from pdewm.baselines.factory import build_baseline_model
 from pdewm.baselines.pod_mlp import PODMLPBaseline
 from pdewm.data.datasets import TransitionWindowDataset, load_trajectory_samples
+from pdewm.evaluation.rollout_figures import build_state_model_rollout_figures
 from pdewm.evaluation.trajectory_metrics import evaluate_state_model_trajectories
 from pdewm.utils.device import resolve_device
-from pdewm.utils.wandb import flatten_metrics, init_wandb_run
+from pdewm.utils.wandb import (
+    compose_wandb_group,
+    compose_wandb_name,
+    flatten_metrics,
+    init_wandb_run,
+)
 
 
 @dataclass(slots=True)
 class BaselineEpochMetrics:
     loss: float
+    loss_std: float
+    loss_min: float
+    loss_max: float
     phys_1step: float
     rollout: float
 
     def to_dict(self) -> dict[str, float]:
         return {
             "loss": self.loss,
+            "loss_std": self.loss_std,
+            "loss_min": self.loss_min,
+            "loss_max": self.loss_max,
             "phys_1step": self.phys_1step,
             "rollout": self.rollout,
         }
@@ -41,23 +53,14 @@ def train_baseline(cfg: DictConfig) -> dict[str, Any]:
         splits=tuple(cfg.train.train_splits),
         rollout_horizon=int(cfg.train.rollout_horizon),
     )
-    val_dataset = TransitionWindowDataset(
+    eval_dataset = TransitionWindowDataset(
         cfg.train.dataset_root,
-        splits=tuple(cfg.train.val_splits),
+        splits=tuple(cfg.train.eval_splits),
         rollout_horizon=int(cfg.train.rollout_horizon),
     )
-    test_dataset = TransitionWindowDataset(
+    eval_trajectories = load_trajectory_samples(
         cfg.train.dataset_root,
-        splits=tuple(cfg.train.test_splits),
-        rollout_horizon=int(cfg.train.rollout_horizon),
-    )
-    val_trajectories = load_trajectory_samples(
-        cfg.train.dataset_root,
-        splits=tuple(cfg.train.val_splits),
-    )
-    test_trajectories = load_trajectory_samples(
-        cfg.train.dataset_root,
-        splits=tuple(cfg.train.test_splits),
+        splits=tuple(cfg.train.eval_splits),
     )
 
     sample = train_dataset[0]
@@ -79,14 +82,8 @@ def train_baseline(cfg: DictConfig) -> dict[str, Any]:
         shuffle=True,
         num_workers=int(cfg.train.num_workers),
     )
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=int(cfg.train.batch_size),
-        shuffle=False,
-        num_workers=int(cfg.train.num_workers),
-    )
-    test_loader = DataLoader(
-        test_dataset,
+    eval_loader = DataLoader(
+        eval_dataset,
         batch_size=int(cfg.train.batch_size),
         shuffle=False,
         num_workers=int(cfg.train.num_workers),
@@ -95,12 +92,16 @@ def train_baseline(cfg: DictConfig) -> dict[str, Any]:
     output_dir = Path(str(cfg.train.output_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
     history: list[dict[str, Any]] = []
-    best_val = float("inf")
-    best_epoch = 0
     wandb_run = init_wandb_run(
         cfg,
-        default_name=f"{cfg.model.name}-{output_dir.name}",
-        default_group=f"baseline::{Path(str(cfg.train.dataset_root)).name}",
+        default_name=compose_wandb_name(
+            "baseline",
+            cfg.model.name,
+            Path(str(cfg.train.dataset_root)).name,
+            output_dir.name,
+            f"seed {int(cfg.project.seed)}",
+        ),
+        default_group=compose_wandb_group("baseline", cfg.model.name, Path(str(cfg.train.dataset_root)).name),
         default_job_type="train_baseline",
         extra_tags=[str(cfg.model.name), "baseline_1d", str(OmegaConf.select(cfg, "project.phase") or "unknown_phase")],
     )
@@ -115,9 +116,9 @@ def train_baseline(cfg: DictConfig) -> dict[str, Any]:
                 device,
                 training=True,
             )
-            val_metrics = _run_baseline_epoch(
+            eval_metrics = _run_baseline_epoch(
                 model,
-                val_loader,
+                eval_loader,
                 optimizer,
                 cfg.train.loss_weights,
                 device,
@@ -127,7 +128,7 @@ def train_baseline(cfg: DictConfig) -> dict[str, Any]:
                 {
                     "epoch": epoch,
                     "train": train_metrics.to_dict(),
-                    "val": val_metrics.to_dict(),
+                    "eval": eval_metrics.to_dict(),
                 }
             )
 
@@ -136,71 +137,87 @@ def train_baseline(cfg: DictConfig) -> dict[str, Any]:
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "train_metrics": train_metrics.to_dict(),
-                "val_metrics": val_metrics.to_dict(),
+                "eval_metrics": eval_metrics.to_dict(),
                 "config": OmegaConf.to_container(cfg, resolve=True),
             }
             torch.save(checkpoint, output_dir / "last.pt")
-            if val_metrics.loss < best_val:
-                best_val = val_metrics.loss
-                best_epoch = epoch
-                torch.save(checkpoint, output_dir / "best.pt")
 
             wandb_run.log(
                 {
                     "epoch": epoch,
                     **flatten_metrics("train", train_metrics.to_dict()),
-                    **flatten_metrics("val", val_metrics.to_dict()),
-                    "best/val_loss": best_val,
-                    "best/epoch": best_epoch,
+                    **flatten_metrics("eval", eval_metrics.to_dict()),
                 },
                 step=epoch,
             )
+            last_epoch = epoch
+            last_train_metrics = train_metrics
+            last_eval_metrics = eval_metrics
 
-        best_checkpoint = torch.load(output_dir / "best.pt", map_location=device)
-        model.load_state_dict(best_checkpoint["model_state_dict"])
-        model.to(device)
-        val_best_metrics = _run_baseline_epoch(
+        eval_final_metrics = _run_baseline_epoch(
             model,
-            val_loader,
+            eval_loader,
             optimizer,
             cfg.train.loss_weights,
             device,
             training=False,
         )
-        test_metrics = _run_baseline_epoch(
+        trajectory_eval_metrics = evaluate_state_model_trajectories(
             model,
-            test_loader,
-            optimizer,
-            cfg.train.loss_weights,
-            device,
-            training=False,
-        )
-        trajectory_val_metrics = evaluate_state_model_trajectories(
-            model,
-            val_trajectories,
+            eval_trajectories,
             device=device,
         )
-        trajectory_test_metrics = evaluate_state_model_trajectories(
+
+        rollout_eval_figures = build_state_model_rollout_figures(
             model,
-            test_trajectories,
+            eval_trajectories,
             device=device,
+            split_name="eval",
         )
 
         summary = {
             "model_name": str(cfg.model.name),
-            "best_epoch": best_epoch,
-            "best_val_loss": best_val,
-            "val_metrics": val_best_metrics.to_dict(),
-            "test_metrics": test_metrics.to_dict(),
-            "trajectory_val_metrics": trajectory_val_metrics.to_dict(),
-            "trajectory_test_metrics": trajectory_test_metrics.to_dict(),
+            "final_epoch": int(last_epoch),
+            "final_eval_loss": float(eval_final_metrics.loss),
+            "train_metrics": last_train_metrics.to_dict(),
+            "eval_metrics": eval_final_metrics.to_dict(),
+            "trajectory_eval_metrics": trajectory_eval_metrics.to_dict(),
+            "selected_checkpoint": str(output_dir / "last.pt"),
         }
     finally:
         history_path = output_dir / "history.json"
         history_path.write_text(json.dumps(history, indent=2), encoding="utf-8")
-        summary = locals().get("summary", {"model_name": str(cfg.model.name), "best_epoch": best_epoch, "best_val_loss": best_val})
+        summary = locals().get(
+            "summary",
+            {
+                "model_name": str(cfg.model.name),
+                "final_epoch": int(locals().get("last_epoch", 0)),
+                "final_eval_loss": float(
+                    getattr(locals().get("last_eval_metrics"), "loss", float("inf"))
+                ),
+                "selected_checkpoint": str(output_dir / "last.pt"),
+            },
+        )
         summary_path = output_dir / "summary.json"
         summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        for rank_label, payload in locals().get("rollout_eval_figures", {}).items():
+            figure_path = output_dir / f"rollout_eval_{rank_label}.png"
+            payload.figure.savefig(figure_path, dpi=160, bbox_inches="tight")
+            wandb_run.log(
+                {
+                    f"rollout_figures/eval_{rank_label}": payload.figure,
+                    f"rollout_figures/eval_{rank_label}_rmse": payload.rollout_rmse,
+                    f"rollout_figures/eval_{rank_label}_trajectory_id": payload.trajectory_id,
+                }
+            )
+            wandb_run.save_file(figure_path)
+            try:
+                import matplotlib.pyplot as plt
+
+                plt.close(payload.figure)
+            except Exception:
+                pass
+
         wandb_run.update_summary(flatten_metrics("summary", summary))
         wandb_run.update_summary({"output_dir": str(output_dir)})
         wandb_run.save_file(history_path)
@@ -233,6 +250,7 @@ def _run_baseline_epoch(
 ) -> BaselineEpochMetrics:
     model.train(training)
     accumulators = {"loss": 0.0, "phys_1step": 0.0, "rollout": 0.0}
+    batch_losses: list[float] = []
     num_batches = 0
 
     grad_context = torch.enable_grad() if training else torch.no_grad()
@@ -257,7 +275,9 @@ def _run_baseline_epoch(
                 total_loss.backward()
                 optimizer.step()
 
-            accumulators["loss"] += float(total_loss.detach().cpu())
+            detached_loss = float(total_loss.detach().cpu())
+            accumulators["loss"] += detached_loss
+            batch_losses.append(detached_loss)
             accumulators["phys_1step"] += float(phys_1step.detach().cpu())
             accumulators["rollout"] += float(rollout_loss.detach().cpu())
             num_batches += 1
@@ -267,6 +287,9 @@ def _run_baseline_epoch(
 
     return BaselineEpochMetrics(
         loss=accumulators["loss"] / num_batches,
+        loss_std=float(torch.tensor(batch_losses, dtype=torch.float64).std(unbiased=False).item()),
+        loss_min=min(batch_losses),
+        loss_max=max(batch_losses),
         phys_1step=accumulators["phys_1step"] / num_batches,
         rollout=accumulators["rollout"] / num_batches,
     )

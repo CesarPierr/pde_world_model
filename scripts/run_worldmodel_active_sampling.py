@@ -20,6 +20,7 @@ from pdewm.solvers.contexts import context_from_metadata
 from pdewm.solvers.factory import build_solver_from_context
 from pdewm.utils.git import get_git_commit_hash
 from pdewm.utils.device import resolve_device
+from pdewm.utils.wandb import compose_wandb_group, compose_wandb_name
 
 
 def main() -> None:
@@ -68,7 +69,6 @@ def main() -> None:
                 f"data.dataset_version={args.data_version}",
                 f"data.output_dir={data_root.as_posix()}",
                 "data.splits.train.num_trajectories=16",
-                "data.splits.val.num_trajectories=4",
                 "data.splits.test.num_trajectories=4",
                 "data.splits.parameter_ood.num_trajectories=4",
                 f"data.num_steps={args.num_steps}",
@@ -77,7 +77,7 @@ def main() -> None:
         )
 
     ae_dir = output_root / "autoencoder"
-    ae_checkpoint = ae_dir / "best.pt"
+    ae_checkpoint = ae_dir / "last.pt"
     if args.prepare_ae or not ae_checkpoint.exists():
         ae_command = [
             sys.executable,
@@ -96,8 +96,8 @@ def main() -> None:
                 project=args.wandb_project,
                 entity=args.wandb_entity,
                 mode=args.wandb_mode,
-                group=args.wandb_group or f"worldmodel_{args.data_version}",
-                name=f"{args.data_version}_autoencoder",
+                group=args.wandb_group or compose_wandb_group("worldmodel-active", args.data_version, "autoencoder"),
+                name=compose_wandb_name("worldmodel-active", args.data_version, "autoencoder"),
                 tags=["active_sampling", args.data_config, "autoencoder_1d"],
             )
         )
@@ -140,8 +140,15 @@ def main() -> None:
                         project=args.wandb_project,
                         entity=args.wandb_entity,
                         mode=args.wandb_mode,
-                        group=args.wandb_group or f"worldmodel_{args.data_version}",
-                        name=f"{args.data_version}_iter{iteration:02d}_member{member_index:02d}",
+                        group=args.wandb_group
+                        or compose_wandb_group("worldmodel-active", args.data_version, "dynamics-committee"),
+                        name=compose_wandb_name(
+                            "worldmodel-active",
+                            args.data_version,
+                            f"iter {iteration:02d}",
+                            f"member {member_index:02d}",
+                            f"seed {args.seed + member_index}",
+                        ),
                         tags=[
                             "active_sampling",
                             args.data_config,
@@ -154,7 +161,7 @@ def main() -> None:
                 _run(
                     member_command
                 )
-            committee_checkpoints.append(str(member_dir / "best.pt"))
+            committee_checkpoints.append(str(member_dir / "last.pt"))
             ensemble_summaries.append(json.loads(summary_path.read_text(encoding="utf-8")))
 
         iteration_summary = {

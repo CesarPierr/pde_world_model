@@ -47,6 +47,7 @@ from pdewm.data.schema import DatasetManifest, TransitionRecord
 from pdewm.data.writer import OfflineDatasetWriter
 from pdewm.utils.device import resolve_device
 from pdewm.utils.git import get_git_commit_hash
+from pdewm.utils.wandb import compose_wandb_group, compose_wandb_name
 
 
 # --------------------------------------------------------------------------
@@ -91,8 +92,7 @@ def main() -> None:
     parser.add_argument("--grid-size", type=int, default=128)
     parser.add_argument("--num-steps", type=int, default=32)
     parser.add_argument("--train-trajectories", type=int, default=32)
-    parser.add_argument("--val-trajectories", type=int, default=8)
-    parser.add_argument("--test-trajectories", type=int, default=8)
+    parser.add_argument("--eval-trajectories", type=int, default=8)
     parser.add_argument("--ood-trajectories", type=int, default=8)
 
     # AE architecture
@@ -161,8 +161,7 @@ def main() -> None:
             f"data.dataset_version={args.data_version}",
             f"data.output_dir={Path(args.dataset_root).parents[1]}",
             f"data.splits.train.num_trajectories={args.train_trajectories}",
-            f"data.splits.val.num_trajectories={args.val_trajectories}",
-            f"data.splits.test.num_trajectories={args.test_trajectories}",
+            f"data.splits.test.num_trajectories={args.eval_trajectories}",
             f"data.splits.parameter_ood.num_trajectories={args.ood_trajectories}",
             f"data.num_steps={args.num_steps}",
             f"solver.grid_size={args.grid_size}",
@@ -171,7 +170,7 @@ def main() -> None:
 
     # --- AE warm-up ---
     ae_dir = output_root / "warmup_autoencoder"
-    ae_checkpoint = ae_dir / "best.pt"
+    ae_checkpoint = ae_dir / "last.pt"
     if args.prepare_ae or not ae_checkpoint.exists():
         ae_cmd = [
             sys.executable, "scripts/train_autoencoder.py",
@@ -187,8 +186,17 @@ def main() -> None:
         ae_cmd.extend(_wandb_overrides(
             enabled=args.wandb, project=args.wandb_project,
             entity=args.wandb_entity, mode=args.wandb_mode,
-            group=args.wandb_group or f"genbench_{args.data_version}",
-            name=f"{args.data_version}_warmup_ae",
+            group=args.wandb_group or compose_wandb_group(
+                "generative-benchmark",
+                args.data_version,
+                "warmup-autoencoder",
+            ),
+            name=compose_wandb_name(
+                "generative benchmark",
+                args.data_version,
+                "warmup autoencoder",
+                f"seed {args.seed}",
+            ),
             tags=["generative_benchmark", args.data_config, "warmup_ae"],
         ))
         _run(ae_cmd)
@@ -518,13 +526,24 @@ def _run_regime_ablation(
                 project=wandb_args.wandb_project,
                 entity=wandb_args.wandb_entity,
                 mode=wandb_args.wandb_mode,
-                group=wandb_args.wandb_group or "genbench_regime",
-                name=f"{regime}_m{mi:02d}",
+                group=wandb_args.wandb_group or compose_wandb_group(
+                    "generative-benchmark",
+                    wandb_args.data_version,
+                    "regime-ablation",
+                    regime,
+                ),
+                name=compose_wandb_name(
+                    "generative benchmark",
+                    "regime ablation",
+                    regime,
+                    f"seed {seed + mi}",
+                    f"member {mi:02d}",
+                ),
                 tags=["generative_benchmark", "regime_ablation", regime],
             ))
             _run(cmd)
         member_summaries.append(json.loads(member_summary.read_text(encoding="utf-8")))
-        member_checkpoints.append(str(member_dir / "best.pt"))
+        member_checkpoints.append(str(member_dir / "last.pt"))
 
     result = {
         "regime": regime,
@@ -572,13 +591,24 @@ def _fine_tune_committee(
                 project=wandb_args.wandb_project,
                 entity=wandb_args.wandb_entity,
                 mode=wandb_args.wandb_mode,
-                group=wandb_args.wandb_group or f"genbench_{strategy}",
-                name=f"{strategy}_r{round_index:02d}_m{mi:02d}",
+                group=wandb_args.wandb_group or compose_wandb_group(
+                    "generative-benchmark",
+                    wandb_args.data_version,
+                    "acquisition",
+                    strategy,
+                ),
+                name=compose_wandb_name(
+                    "generative benchmark",
+                    strategy,
+                    f"round {round_index:02d}",
+                    f"seed {seed + mi}",
+                    f"member {mi:02d}",
+                ),
                 tags=["generative_benchmark", "acquisition", strategy, regime],
             ))
             _run(cmd)
         member_summaries.append(json.loads(member_summary.read_text(encoding="utf-8")))
-        member_checkpoints.append(str(member_dir / "best.pt"))
+        member_checkpoints.append(str(member_dir / "last.pt"))
     return {
         "aggregate": _aggregate_ensemble(member_summaries),
         "members": member_summaries,
@@ -592,41 +622,32 @@ def _fine_tune_committee(
 
 def _aggregate_ensemble(summaries: list[dict[str, Any]]) -> dict[str, float]:
     return {
-        "best_val_loss_mean": _mean_nested(summaries, ("best_val_loss",)),
-        "ae_val_loss_mean": _mean_nested(summaries, ("ae_val_metrics", "loss")),
-        "ae_test_loss_mean": _mean_nested(summaries, ("ae_test_metrics", "loss")),
-        "trajectory_val_one_step_rmse_mean": _mean_nested(
-            summaries, ("trajectory_val_metrics", "one_step_rmse", "mean")),
-        "trajectory_val_one_step_nrmse_mean": _mean_nested(
-            summaries, ("trajectory_val_metrics", "one_step_nrmse", "mean")),
-        "trajectory_val_rollout_rmse_mean": _mean_nested(
-            summaries, ("trajectory_val_metrics", "rollout_rmse", "mean")),
-        "trajectory_val_rollout_nrmse_mean": _mean_nested(
-            summaries, ("trajectory_val_metrics", "rollout_nrmse", "mean")),
-        "trajectory_test_one_step_rmse_mean": _mean_nested(
-            summaries, ("trajectory_test_metrics", "one_step_rmse", "mean")),
-        "trajectory_test_one_step_nrmse_mean": _mean_nested(
-            summaries, ("trajectory_test_metrics", "one_step_nrmse", "mean")),
-        "trajectory_test_rollout_rmse_mean": _mean_nested(
-            summaries, ("trajectory_test_metrics", "rollout_rmse", "mean")),
-        "trajectory_test_rollout_nrmse_mean": _mean_nested(
-            summaries, ("trajectory_test_metrics", "rollout_nrmse", "mean")),
+        "final_eval_loss_mean": _mean_nested(summaries, ("final_eval_loss",)),
+        "ae_eval_loss_mean": _mean_nested(summaries, ("ae_eval_metrics", "loss")),
+        "trajectory_eval_one_step_rmse_mean": _mean_nested(
+            summaries, ("trajectory_eval_metrics", "one_step_rmse", "mean")),
+        "trajectory_eval_one_step_nrmse_mean": _mean_nested(
+            summaries, ("trajectory_eval_metrics", "one_step_nrmse", "mean")),
+        "trajectory_eval_rollout_rmse_mean": _mean_nested(
+            summaries, ("trajectory_eval_metrics", "rollout_rmse", "mean")),
+        "trajectory_eval_rollout_nrmse_mean": _mean_nested(
+            summaries, ("trajectory_eval_metrics", "rollout_nrmse", "mean")),
     }
 
 
 def _select_regime(results: dict[str, dict[str, Any]], *, preferred: str) -> str:
     if preferred != "auto":
         return preferred
-    ae_floor = min(r["aggregate"]["ae_val_loss_mean"] for r in results.values())
+    ae_floor = min(r["aggregate"]["ae_eval_loss_mean"] for r in results.values())
     rollout_floor = min(
-        r["aggregate"]["trajectory_val_rollout_nrmse_mean"] for r in results.values()
+        r["aggregate"]["trajectory_eval_rollout_nrmse_mean"] for r in results.values()
     )
     best, best_score = "", float("inf")
     for regime, result in results.items():
         a = result["aggregate"]
         score = (
-            a["ae_val_loss_mean"] / max(ae_floor, 1e-8)
-            * a["trajectory_val_rollout_nrmse_mean"] / max(rollout_floor, 1e-8)
+            a["ae_eval_loss_mean"] / max(ae_floor, 1e-8)
+            * a["trajectory_eval_rollout_nrmse_mean"] / max(rollout_floor, 1e-8)
         )
         a["selection_score"] = score
         if score < best_score:
@@ -639,10 +660,8 @@ def _curve_point(*, aggregate, online_solver_transitions, offline_transitions, r
         "round_index": round_index,
         "online_solver_transitions": int(online_solver_transitions),
         "total_transitions": int(offline_transitions + online_solver_transitions),
-        "trajectory_val_rollout_nrmse_mean": float(aggregate["trajectory_val_rollout_nrmse_mean"]),
-        "trajectory_val_one_step_nrmse_mean": float(aggregate["trajectory_val_one_step_nrmse_mean"]),
-        "trajectory_test_rollout_nrmse_mean": float(aggregate["trajectory_test_rollout_nrmse_mean"]),
-        "trajectory_test_one_step_nrmse_mean": float(aggregate["trajectory_test_one_step_nrmse_mean"]),
+        "trajectory_eval_rollout_nrmse_mean": float(aggregate["trajectory_eval_rollout_nrmse_mean"]),
+        "trajectory_eval_one_step_nrmse_mean": float(aggregate["trajectory_eval_one_step_nrmse_mean"]),
     }
 
 
@@ -707,31 +726,30 @@ def _plot_all_curves(results: dict[str, dict[str, Any]], out: Path):
     }
     colors = {**colors_heuristic, **colors_generative}
 
-    for split in ("val", "test"):
-        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-        for strategy, r in results.items():
-            xs = [p["online_solver_transitions"] for p in r["curve"]]
-            c = colors.get(strategy, "#333333")
-            lw = 2.5 if strategy.startswith("generative_") else 1.5
-            ls = "-" if not strategy.startswith("generative_") else "--"
-            axes[0].plot(
-                xs, [p[f"trajectory_{split}_one_step_nrmse_mean"] for p in r["curve"]],
-                marker="o", color=c, linewidth=lw, linestyle=ls, label=strategy, markersize=4,
-            )
-            axes[1].plot(
-                xs, [p[f"trajectory_{split}_rollout_nrmse_mean"] for p in r["curve"]],
-                marker="o", color=c, linewidth=lw, linestyle=ls, label=strategy, markersize=4,
-            )
-        axes[0].set_title(f"{split.title()} — One-Step NRMSE vs Online Transitions")
-        axes[1].set_title(f"{split.title()} — Rollout NRMSE vs Online Transitions")
-        for ax in axes:
-            ax.set_xlabel("Online Solver Transitions")
-            ax.set_ylabel("NRMSE")
-            ax.grid(True, alpha=0.3)
-        axes[1].legend(loc="best", fontsize=7)
-        fig.tight_layout()
-        fig.savefig(out / f"{split}_nrmse_curves.png", dpi=150)
-        plt.close(fig)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    for strategy, r in results.items():
+        xs = [p["online_solver_transitions"] for p in r["curve"]]
+        c = colors.get(strategy, "#333333")
+        lw = 2.5 if strategy.startswith("generative_") else 1.5
+        ls = "-" if not strategy.startswith("generative_") else "--"
+        axes[0].plot(
+            xs, [p["trajectory_eval_one_step_nrmse_mean"] for p in r["curve"]],
+            marker="o", color=c, linewidth=lw, linestyle=ls, label=strategy, markersize=4,
+        )
+        axes[1].plot(
+            xs, [p["trajectory_eval_rollout_nrmse_mean"] for p in r["curve"]],
+            marker="o", color=c, linewidth=lw, linestyle=ls, label=strategy, markersize=4,
+        )
+    axes[0].set_title("Eval — One-Step NRMSE vs Online Transitions")
+    axes[1].set_title("Eval — Rollout NRMSE vs Online Transitions")
+    for ax in axes:
+        ax.set_xlabel("Online Solver Transitions")
+        ax.set_ylabel("NRMSE")
+        ax.grid(True, alpha=0.3)
+    axes[1].legend(loc="best", fontsize=7)
+    fig.tight_layout()
+    fig.savefig(out / "eval_nrmse_curves.png", dpi=150)
+    plt.close(fig)
 
 
 # --------------------------------------------------------------------------
@@ -744,16 +762,15 @@ def _format_benchmark_markdown(s: dict[str, Any]) -> str:
         f"- selected regime: `{s['selected_regime']}`",
         f"- offline transitions: `{s['offline_transitions']}`", "",
         "## Strategy Comparison", "",
-        "| Strategy | Type | Online Trans. | Val Rollout NRMSE | Test Rollout NRMSE |",
-        "| --- | --- | ---: | ---: | ---: |",
+        "| Strategy | Type | Online Trans. | Eval Rollout NRMSE |",
+        "| --- | --- | ---: | ---: |",
     ]
     for strat, r in s["strategy_results"].items():
         final = r["curve"][-1]
         stype = "generative" if strat.startswith("generative_") else "heuristic"
         lines.append(
             f"| {strat} | {stype} | {int(r['online_solver_transitions'])} | "
-            f"{float(final['trajectory_val_rollout_nrmse_mean']):.6f} | "
-            f"{float(final['trajectory_test_rollout_nrmse_mean']):.6f} |"
+            f"{float(final['trajectory_eval_rollout_nrmse_mean']):.6f} |"
         )
     lines.append("")
     return "\n".join(lines)

@@ -61,7 +61,7 @@ uv run python scripts/train_autoencoder.py \
 ```bash
 uv run python scripts/train_dynamics.py \
   train.dataset_root=data/generated_local/burgers_1d_offline/local \
-  train.ae_checkpoint=artifacts/runs/ae_local/best.pt \
+  train.ae_checkpoint=artifacts/runs/ae_local/last.pt \
   train.output_dir=artifacts/runs/dynamics_local \
   train.epochs=5 \
   train.batch_size=8
@@ -72,7 +72,7 @@ Mode joint avec EMA:
 ```bash
 uv run python scripts/train_dynamics.py \
   train.dataset_root=data/generated_local/burgers_1d_offline/local \
-  train.ae_checkpoint=artifacts/runs/ae_local/best.pt \
+  train.ae_checkpoint=artifacts/runs/ae_local/last.pt \
   train.output_dir=artifacts/runs/dynamics_joint_local \
   train.regime=joint_ema \
   train.epochs=5 \

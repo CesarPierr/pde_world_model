@@ -1,0 +1,109 @@
+data:
+  dataset_name: burgers_1d_offline
+  dataset_version: challenging_v1
+  output_dir: data/generated_challenging
+  sample_origin: offline
+  seed: 7
+  num_steps: 48
+  generation:
+    seed_stride: 1009
+  splits:
+    train:
+      num_trajectories: 64
+    test:
+      num_trajectories: 12
+    parameter_ood:
+      num_trajectories: 12
+      param_overrides:
+        viscosity_range:
+        - 0.002
+        - 0.008
+        forcing_amplitude_range:
+        - 0.1
+        - 0.2
+solver:
+  name: burgers_1d
+  pde_id: burgers_1d
+  grid_size: 256
+  domain_length: 6.283185307179586
+  dealias: true
+  dt: 0.0025
+  parameter_space:
+    viscosity_range:
+    - 0.01
+    - 0.08
+    ic_amplitude_range:
+    - 0.5
+    - 1.5
+    ic_bandwidth_range:
+    - 3
+    - 7
+    forcing_amplitude_range:
+    - 0.0
+    - 0.15
+    forcing_mode_choices:
+    - 1
+    - 2
+    - 3
+project:
+  seed: 7
+
+dataset_root=/home/cesarpi-ext/pde_world_model/data/generated_challenging/burgers_1d_offline/challenging_v1
+samples=4218
+trajectories=88
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /home/cesarpi-ext/.netrc.
+wandb: Currently logged in as: pedroczr (deemel) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run jjs0pkb0
+wandb: Tracking run with wandb version 0.26.0
+wandb: Run data is saved locally in artifacts/wandb/wandb/run-20260416_120345-jjs0pkb0
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run challenging benchmark | burgers-1d | warmup autoencoder | seed 7
+wandb: ⭐️ View project at https://wandb.ai/deemel/pde-world-model
+wandb: 🚀 View run at https://wandb.ai/deemel/pde-world-model/runs/jjs0pkb0
+wandb: WARNING Symlinked 1 file into the W&B run directory; call wandb.save again to sync new files.
+wandb: WARNING Symlinked 1 file into the W&B run directory; call wandb.save again to sync new files.
+wandb: updating run metadata
+wandb: uploading output.log; uploading wandb-summary.json; uploading config.yaml; uploading artifacts/runs/challenging_benchmark/burgers_1d_seed7/warmup_autoencoder/history.json; uploading artifacts/runs/challenging_benchmark/burgers_1d_seed7/warmup_autoencoder/summary.json
+wandb: uploading history steps 296-299, summary, console lines 0-1
+wandb: 
+wandb: Run history:
+wandb:          epoch ▁▁▁▂▂▂▂▂▂▃▃▃▃▃▃▄▄▄▄▄▄▅▅▅▅▆▆▆▆▆▆▆▆▆▆▇▇▇▇█
+wandb:  eval/gradient ▁▁▂▂▂▁▁▁▁▆▁▂▁▁▁▂▂▂▂▁▁▁▂▁▁▁▁▁▁▁█▁▄▁▁▂▂▂▂▂
+wandb:        eval/l1 ▁▁▁▁▄▂▂▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁███▃▇▇▅▁▁█████
+wandb:        eval/l2 ▁▁▁▁▁▁▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁▂▁▁▁██▃█████
+wandb:      eval/loss ▂▁▁▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁███████
+wandb:  eval/loss_max ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▁▁▁▂▁▁███████████
+wandb:  eval/loss_min ▁▁▁▁▂▁▁▂▂▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▃▁█▁█▃▁▁▁██████
+wandb:  eval/loss_std ▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁██████
+wandb:  eval/spectral ▃▁▁▁▄▃▂▁▁▃▂▂▂▂▂▁▁▂▁▂▁▁▁▁▂▁▁▁▁▁▄▂█▃▃█████
+wandb: train/gradient ▁▅▄▄▃▄▃▂▁▇▁█▄▄▄▂▂▂▂▁▂▆▂▃▂▄▄▄▄▄▄▃▄▃▄▄▃▂▂▄
+wandb:             +7 ...
+wandb: 
+wandb: Run summary:
+wandb:         epoch 300
+wandb: eval/gradient 0.02928
+wandb:       eval/l1 0.71537
+wandb:       eval/l2 0.81974
+wandb:     eval/loss 1.73931
+wandb: eval/loss_max 3.40225
+wandb: eval/loss_min 0.47072
+wandb: eval/loss_std 0.83664
+wandb: eval/spectral 2.01271
+wandb:   final_epoch 300
+wandb:           +11 ...
+wandb: 
+wandb: 🚀 View run challenging benchmark | burgers-1d | warmup autoencoder | seed 7 at: https://wandb.ai/deemel/pde-world-model/runs/jjs0pkb0
+wandb: ⭐️ View project at: https://wandb.ai/deemel/pde-world-model
+wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 2 other file(s)
+wandb: Find logs at: artifacts/wandb/wandb/run-20260416_120345-jjs0pkb0/logs
+final_epoch=300
+final_eval_loss=1.739307
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /home/cesarpi-ext/.netrc.
+wandb: Currently logged in as: pedroczr (deemel) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run im9oowwf
+wandb: Tracking run with wandb version 0.26.0
+wandb: Run data is saved locally in artifacts/wandb/wandb/run-20260416_122908-im9oowwf
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run challenging benchmark | burgers-1d | regime ablation | frozen | seed 7 | member 00
+wandb: ⭐️ View project at https://wandb.ai/deemel/pde-world-model
+wandb: 🚀 View run at https://wandb.ai/deemel/pde-world-model/runs/im9oowwf

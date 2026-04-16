@@ -9,8 +9,6 @@ generation:
 splits:
   train:
     num_trajectories: 24
-  val:
-    num_trajectories: 6
   test:
     num_trajectories: 6
   parameter_ood:
@@ -18,4 +16,3 @@ splits:
     param_overrides:
       domain_length_range: [28.0, 32.0]
       ic_amplitude_range: [1.0, 1.6]
-

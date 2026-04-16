@@ -83,7 +83,7 @@ uv run python scripts/train_autoencoder.py \
 ```bash
 uv run python scripts/train_dynamics.py \
   train.dataset_root=data/generated/burgers_1d_offline/v0 \
-  train.ae_checkpoint=artifacts/runs/ae_burgers/best.pt \
+  train.ae_checkpoint=artifacts/runs/ae_burgers/last.pt \
   train.output_dir=artifacts/runs/dynamics_burgers \
   train.epochs=120 \
   train.regime=joint_ema

@@ -92,6 +92,16 @@ def init_wandb_run(
     return WandbRunHandle(run=run)
 
 
+def compose_wandb_name(*parts: Any) -> str:
+    cleaned = [_normalize_wandb_part(part) for part in parts]
+    return " | ".join(part for part in cleaned if part)
+
+
+def compose_wandb_group(*parts: Any) -> str:
+    cleaned = [_normalize_wandb_part(part) for part in parts]
+    return "/".join(part for part in cleaned if part)
+
+
 def flatten_metrics(prefix: str, metrics: dict[str, Any]) -> dict[str, Any]:
     flattened: dict[str, Any] = {}
     for key, value in metrics.items():
@@ -107,3 +117,10 @@ def _maybe_string(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _normalize_wandb_part(value: Any) -> str:
+    text = _maybe_string(value)
+    if text is None:
+        return ""
+    return text.replace("_", "-")

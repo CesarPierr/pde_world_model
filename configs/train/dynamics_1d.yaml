@@ -1,10 +1,9 @@
 dataset_root: data/generated/burgers_1d_offline/v0
-ae_checkpoint: artifacts/runs/autoencoder_1d/best.pt
+ae_checkpoint: artifacts/runs/autoencoder_1d/last.pt
 resume_checkpoint: null
 regime: frozen
 train_splits: [train]
-val_splits: [val]
-test_splits: [test]
+eval_splits: [test]
 context_features:
   - dt
   - viscosity

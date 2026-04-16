@@ -17,20 +17,28 @@ from pdewm.models.representations.autoencoder_1d import Autoencoder1D
 class MetricDistribution:
     mean: float
     std: float
-    q50: float
-    q90: float
-    q95: float
-    q99: float
+    min: float
+    p10: float
+    p25: float
+    p50: float
+    p75: float
+    p90: float
+    p95: float
+    p99: float
     max: float
 
     def to_dict(self) -> dict[str, float]:
         return {
             "mean": self.mean,
             "std": self.std,
-            "q50": self.q50,
-            "q90": self.q90,
-            "q95": self.q95,
-            "q99": self.q99,
+            "min": self.min,
+            "p10": self.p10,
+            "p25": self.p25,
+            "p50": self.p50,
+            "p75": self.p75,
+            "p90": self.p90,
+            "p95": self.p95,
+            "p99": self.p99,
             "max": self.max,
         }
 
@@ -79,12 +87,8 @@ def evaluate_state_model_trajectories(
                 current_states[:1],
                 horizon=target_states.shape[0],
             )[0]
-            one_step_rmse, one_step_nrmse = _aggregate_error(current_states, one_step_predictions, target_states)
-            rollout_rmse, rollout_nrmse = _aggregate_error(
-                current_states[:1],
-                rollout_predictions,
-                target_states,
-            )
+            one_step_rmse, one_step_nrmse = _aggregate_error(one_step_predictions, target_states)
+            rollout_rmse, rollout_nrmse = _aggregate_error(rollout_predictions, target_states)
             one_step_rmse_values.append(one_step_rmse)
             one_step_nrmse_values.append(one_step_nrmse)
             rollout_rmse_values.append(rollout_rmse)
@@ -139,16 +143,8 @@ def evaluate_world_model_trajectories(
                 continuous_context.unsqueeze(0),
             )[0]
             rollout_predictions = autoencoder.decode(rollout_latents)
-            one_step_rmse, one_step_nrmse = _aggregate_error(
-                current_states,
-                one_step_predictions,
-                target_states,
-            )
-            rollout_rmse, rollout_nrmse = _aggregate_error(
-                current_states[:1],
-                rollout_predictions,
-                target_states,
-            )
+            one_step_rmse, one_step_nrmse = _aggregate_error(one_step_predictions, target_states)
+            rollout_rmse, rollout_nrmse = _aggregate_error(rollout_predictions, target_states)
             one_step_rmse_values.append(one_step_rmse)
             one_step_nrmse_values.append(one_step_nrmse)
             rollout_rmse_values.append(rollout_rmse)
@@ -166,16 +162,14 @@ def evaluate_world_model_trajectories(
 
 
 def _aggregate_error(
-    _conditioning_states: torch.Tensor,
     predictions: torch.Tensor,
     targets: torch.Tensor,
 ) -> tuple[float, float]:
-    del _conditioning_states
-    rmse_per_transition = torch.sqrt(
-        torch.mean((predictions - targets) ** 2, dim=tuple(range(1, predictions.ndim)))
-    )
-    target_rms = torch.sqrt(torch.mean(targets**2, dim=tuple(range(1, targets.ndim))))
-    nrmse_per_transition = rmse_per_transition / torch.clamp(target_rms, min=1.0e-6)
+    flat_predictions = predictions.reshape(predictions.shape[0], -1)
+    flat_targets = targets.reshape(targets.shape[0], -1)
+    rmse_per_transition = torch.sqrt(torch.mean((flat_predictions - flat_targets) ** 2, dim=1))
+    target_l2 = torch.linalg.vector_norm(flat_targets, ord=2, dim=1)
+    nrmse_per_transition = rmse_per_transition / torch.clamp(target_l2, min=1.0e-6)
     return (
         float(rmse_per_transition.mean().cpu()),
         float(nrmse_per_transition.mean().cpu()),
@@ -189,9 +183,13 @@ def _summarize_distribution(values: list[float]) -> MetricDistribution:
     return MetricDistribution(
         mean=float(array.mean()),
         std=float(array.std()),
-        q50=float(np.quantile(array, 0.50)),
-        q90=float(np.quantile(array, 0.90)),
-        q95=float(np.quantile(array, 0.95)),
-        q99=float(np.quantile(array, 0.99)),
+        min=float(array.min()),
+        p10=float(np.quantile(array, 0.10)),
+        p25=float(np.quantile(array, 0.25)),
+        p50=float(np.quantile(array, 0.50)),
+        p75=float(np.quantile(array, 0.75)),
+        p90=float(np.quantile(array, 0.90)),
+        p95=float(np.quantile(array, 0.95)),
+        p99=float(np.quantile(array, 0.99)),
         max=float(array.max()),
     )

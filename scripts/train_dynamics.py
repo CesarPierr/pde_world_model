@@ -16,16 +16,13 @@ def main() -> None:
     seed_everything(int(cfg.project.seed))
     result = train_latent_dynamics(cfg)
     print(f"regime={result['regime']}")
-    print(f"best_val_loss={result['best_val_loss']:.6f}")
-    print(f"test_one_step={result['test_metrics']['phys_1step']:.6f}")
-    print(f"test_rollout={result['test_metrics']['rollout']:.6f}")
+    print(f"final_epoch={result['final_epoch']}")
+    print(f"final_eval_loss={result['final_eval_loss']:.6f}")
+    print(f"eval_one_step={result['eval_metrics']['phys_1step']:.6f}")
+    print(f"eval_rollout={result['eval_metrics']['rollout']:.6f}")
     print(
-        "trajectory_val_rollout_nrmse="
-        f"{result['trajectory_val_metrics']['rollout_nrmse']['mean']:.6f}"
-    )
-    print(
-        "trajectory_test_rollout_nrmse="
-        f"{result['trajectory_test_metrics']['rollout_nrmse']['mean']:.6f}"
+        "trajectory_eval_rollout_nrmse="
+        f"{result['trajectory_eval_metrics']['rollout_nrmse']['mean']:.6f}"
     )
 
 

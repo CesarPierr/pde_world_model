@@ -1,6 +1,6 @@
 dataset_root: data/generated/burgers_1d_offline/v0
 train_splits: [train]
-val_splits: [val]
+eval_splits: [test]
 include_next_state: true
 batch_size: 16
 epochs: 10
@@ -14,4 +14,3 @@ loss_weights:
   l2: 1.0
   gradient: 0.1
   spectral: 0.1
-

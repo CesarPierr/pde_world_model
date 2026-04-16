@@ -1,7 +1,6 @@
 dataset_root: data/generated/burgers_1d_offline/v0
 train_splits: [train]
-val_splits: [val]
-test_splits: [test]
+eval_splits: [test]
 rollout_horizon: 2
 batch_size: 8
 epochs: 10

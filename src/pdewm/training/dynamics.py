@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 
 from pdewm.data.context_features import DEFAULT_CONTEXT_FEATURES
 from pdewm.data.datasets import TransitionWindowDataset, load_trajectory_samples
+from pdewm.evaluation.rollout_figures import build_world_model_rollout_figures
 from pdewm.evaluation.trajectory_metrics import evaluate_world_model_trajectories
 from pdewm.models.dynamics.transition_1d import (
     LatentTransitionModel1D,
@@ -23,7 +24,12 @@ from pdewm.models.dynamics.transition_1d import (
 from pdewm.models.representations.autoencoder_1d import Autoencoder1D, Autoencoder1DConfig
 from pdewm.models.representations.losses import AutoencoderLossWeights, compute_autoencoder_losses
 from pdewm.utils.device import resolve_device
-from pdewm.utils.wandb import flatten_metrics, init_wandb_run
+from pdewm.utils.wandb import (
+    compose_wandb_group,
+    compose_wandb_name,
+    flatten_metrics,
+    init_wandb_run,
+)
 
 
 @dataclass(slots=True)
@@ -47,6 +53,9 @@ class ReconstructionMetrics:
 @dataclass(slots=True)
 class WorldModelEpochMetrics:
     loss: float
+    loss_std: float
+    loss_min: float
+    loss_max: float
     dynamics_loss: float
     ae_loss: float
     latent_1step: float
@@ -61,6 +70,9 @@ class WorldModelEpochMetrics:
     def to_dict(self) -> dict[str, float]:
         return {
             "loss": self.loss,
+            "loss_std": self.loss_std,
+            "loss_min": self.loss_min,
+            "loss_max": self.loss_max,
             "dynamics_loss": self.dynamics_loss,
             "ae_loss": self.ae_loss,
             "latent_1step": self.latent_1step,
@@ -91,26 +103,15 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
         rollout_horizon=int(cfg.train.rollout_horizon),
         context_feature_keys=context_features,
     )
-    val_dataset = TransitionWindowDataset(
+    eval_dataset = TransitionWindowDataset(
         cfg.train.dataset_root,
-        splits=tuple(cfg.train.val_splits),
+        splits=tuple(cfg.train.eval_splits),
+        context_feature_keys=context_features,
         rollout_horizon=int(cfg.train.rollout_horizon),
-        context_feature_keys=context_features,
     )
-    test_dataset = TransitionWindowDataset(
+    eval_trajectories = load_trajectory_samples(
         cfg.train.dataset_root,
-        splits=tuple(cfg.train.test_splits),
-        rollout_horizon=int(cfg.train.rollout_horizon),
-        context_feature_keys=context_features,
-    )
-    val_trajectories = load_trajectory_samples(
-        cfg.train.dataset_root,
-        splits=tuple(cfg.train.val_splits),
-        context_feature_keys=context_features,
-    )
-    test_trajectories = load_trajectory_samples(
-        cfg.train.dataset_root,
-        splits=tuple(cfg.train.test_splits),
+        splits=tuple(cfg.train.eval_splits),
         context_feature_keys=context_features,
     )
 
@@ -137,14 +138,8 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
         shuffle=True,
         num_workers=int(cfg.train.num_workers),
     )
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=int(cfg.train.batch_size),
-        shuffle=False,
-        num_workers=int(cfg.train.num_workers),
-    )
-    test_loader = DataLoader(
-        test_dataset,
+    eval_loader = DataLoader(
+        eval_dataset,
         batch_size=int(cfg.train.batch_size),
         shuffle=False,
         num_workers=int(cfg.train.num_workers),
@@ -152,12 +147,17 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
 
     output_dir = Path(str(cfg.train.output_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
-    best_val = float("inf")
     history: list[dict[str, Any]] = []
     wandb_run = init_wandb_run(
         cfg,
-        default_name=f"dynamics-{output_dir.name}",
-        default_group=f"dynamics::{Path(str(cfg.train.dataset_root)).name}",
+        default_name=compose_wandb_name(
+            "dynamics",
+            regime,
+            Path(str(cfg.train.dataset_root)).name,
+            output_dir.name,
+            f"seed {int(cfg.project.seed)}",
+        ),
+        default_group=compose_wandb_group("dynamics", regime, Path(str(cfg.train.dataset_root)).name),
         default_job_type="train_dynamics",
         extra_tags=[
             "dynamics_1d",
@@ -182,11 +182,11 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
                 ema_decay=float(OmegaConf.select(cfg, "train.ema.decay") or 0.995),
                 training=True,
             )
-            val_metrics = _run_world_model_epoch(
+            eval_metrics = _run_world_model_epoch(
                 transition_model=transition_model,
                 autoencoder=autoencoder,
                 ema_autoencoder=ema_autoencoder,
-                dataloader=val_loader,
+                dataloader=eval_loader,
                 optimizer=optimizer,
                 dynamics_loss_weights=cfg.train.loss_weights,
                 ae_loss_weights=ae_loss_weights,
@@ -200,7 +200,7 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
                 {
                     "epoch": epoch,
                     "train": train_metrics.to_dict(),
-                    "val": val_metrics.to_dict(),
+                    "eval": eval_metrics.to_dict(),
                 }
             )
             checkpoint = _build_checkpoint(
@@ -211,39 +211,30 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
                 ema_autoencoder=ema_autoencoder,
                 optimizer=optimizer,
                 train_metrics=train_metrics,
-                val_metrics=val_metrics,
+                eval_metrics=eval_metrics,
                 train_dataset=train_dataset,
                 context_features=context_features,
                 regime=regime,
             )
             torch.save(checkpoint, output_dir / "last.pt")
-            if val_metrics.loss < best_val:
-                best_val = val_metrics.loss
-                torch.save(checkpoint, output_dir / "best.pt")
 
             wandb_run.log(
                 {
                     "epoch": epoch,
                     **flatten_metrics("train", train_metrics.to_dict()),
-                    **flatten_metrics("val", val_metrics.to_dict()),
-                    "best/val_loss": best_val,
+                    **flatten_metrics("eval", eval_metrics.to_dict()),
                 },
                 step=epoch,
             )
+            last_epoch = epoch
+            last_train_metrics = train_metrics
+            last_eval_metrics = eval_metrics
 
-        best_checkpoint = torch.load(output_dir / "best.pt", map_location=device)
-        _load_checkpoint_models(
-            best_checkpoint,
-            transition_model,
-            autoencoder,
-            ema_autoencoder,
-            device=device,
-        )
-        val_best_metrics = _run_world_model_epoch(
+        eval_final_metrics = _run_world_model_epoch(
             transition_model=transition_model,
             autoencoder=autoencoder,
             ema_autoencoder=ema_autoencoder,
-            dataloader=val_loader,
+            dataloader=eval_loader,
             optimizer=optimizer,
             dynamics_loss_weights=cfg.train.loss_weights,
             ae_loss_weights=ae_loss_weights,
@@ -253,63 +244,72 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
             ema_decay=float(OmegaConf.select(cfg, "train.ema.decay") or 0.995),
             training=False,
         )
-        test_metrics = _run_world_model_epoch(
-            transition_model=transition_model,
-            autoencoder=autoencoder,
-            ema_autoencoder=ema_autoencoder,
-            dataloader=test_loader,
-            optimizer=optimizer,
-            dynamics_loss_weights=cfg.train.loss_weights,
-            ae_loss_weights=ae_loss_weights,
-            device=device,
-            regime=regime,
-            ae_loss_scale=ae_loss_scale,
-            ema_decay=float(OmegaConf.select(cfg, "train.ema.decay") or 0.995),
-            training=False,
-        )
-        ae_val_metrics = _evaluate_autoencoder_trajectories(
+        ae_eval_metrics = _evaluate_autoencoder_trajectories(
             autoencoder,
-            val_trajectories,
+            eval_trajectories,
             weights=ae_loss_weights,
             device=device,
         )
-        ae_test_metrics = _evaluate_autoencoder_trajectories(
-            autoencoder,
-            test_trajectories,
-            weights=ae_loss_weights,
-            device=device,
-        )
-        trajectory_val_metrics = evaluate_world_model_trajectories(
+        trajectory_eval_metrics = evaluate_world_model_trajectories(
             transition_model,
             autoencoder,
-            val_trajectories,
+            eval_trajectories,
             device=device,
         )
-        trajectory_test_metrics = evaluate_world_model_trajectories(
+
+        rollout_eval_figures = build_world_model_rollout_figures(
             transition_model,
             autoencoder,
-            test_trajectories,
+            eval_trajectories,
             device=device,
+            split_name="eval",
         )
 
         summary = {
             "regime": regime,
-            "best_val_loss": best_val,
-            "best_epoch": int(best_checkpoint["epoch"]),
+            "final_epoch": int(last_epoch),
+            "final_eval_loss": float(eval_final_metrics.loss),
             "acquisition_autoencoder_source": _acquisition_autoencoder_source(regime),
-            "val_metrics": val_best_metrics.to_dict(),
-            "test_metrics": test_metrics.to_dict(),
-            "ae_val_metrics": ae_val_metrics.to_dict(),
-            "ae_test_metrics": ae_test_metrics.to_dict(),
-            "trajectory_val_metrics": trajectory_val_metrics.to_dict(),
-            "trajectory_test_metrics": trajectory_test_metrics.to_dict(),
+            "train_metrics": last_train_metrics.to_dict(),
+            "eval_metrics": eval_final_metrics.to_dict(),
+            "ae_eval_metrics": ae_eval_metrics.to_dict(),
+            "trajectory_eval_metrics": trajectory_eval_metrics.to_dict(),
+            "selected_checkpoint": str(output_dir / "last.pt"),
         }
     finally:
         history_path = output_dir / "history.json"
         history_path.write_text(json.dumps(history, indent=2), encoding="utf-8")
-        summary = locals().get("summary", {"regime": regime, "best_val_loss": best_val})
+        summary = locals().get(
+            "summary",
+            {
+                "regime": regime,
+                "final_epoch": int(locals().get("last_epoch", 0)),
+                "final_eval_loss": float(
+                    getattr(locals().get("last_eval_metrics"), "loss", float("inf"))
+                ),
+                "selected_checkpoint": str(output_dir / "last.pt"),
+            },
+        )
         summary_path = output_dir / "summary.json"
         summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        for rank_label, payload in locals().get("rollout_eval_figures", {}).items():
+            figure_path = output_dir / f"rollout_eval_{rank_label}.png"
+            payload.figure.savefig(figure_path, dpi=160, bbox_inches="tight")
+            wandb_run.log(
+                {
+                    f"rollout_figures/eval_{rank_label}": payload.figure,
+                    f"rollout_figures/eval_{rank_label}_rmse": payload.rollout_rmse,
+                    f"rollout_figures/eval_{rank_label}_trajectory_id": payload.trajectory_id,
+                }
+            )
+            wandb_run.save_file(figure_path)
+            try:
+                import matplotlib.pyplot as plt
+
+                plt.close(payload.figure)
+            except Exception:
+                pass
+
         wandb_run.update_summary(flatten_metrics("summary", summary))
         wandb_run.update_summary({"output_dir": str(output_dir)})
         wandb_run.save_file(history_path)
@@ -403,6 +403,7 @@ def _run_world_model_epoch(
         "ae_gradient": 0.0,
         "ae_spectral": 0.0,
     }
+    batch_losses: list[float] = []
     num_batches = 0
     grad_context = torch.enable_grad() if training else torch.no_grad()
 
@@ -475,7 +476,9 @@ def _run_world_model_epoch(
                 if ema_autoencoder is not None:
                     _update_ema(autoencoder, ema_autoencoder, decay=ema_decay)
 
-            accumulators["loss"] += float(total_loss.detach().cpu())
+            detached_loss = float(total_loss.detach().cpu())
+            accumulators["loss"] += detached_loss
+            batch_losses.append(detached_loss)
             accumulators["dynamics_loss"] += float(dynamics_loss.detach().cpu())
             accumulators["ae_loss"] += float(ae_total_loss.detach().cpu())
             accumulators["latent_1step"] += float(latent_1step.detach().cpu())
@@ -493,6 +496,9 @@ def _run_world_model_epoch(
 
     return WorldModelEpochMetrics(
         loss=accumulators["loss"] / num_batches,
+        loss_std=float(torch.tensor(batch_losses, dtype=torch.float64).std(unbiased=False).item()),
+        loss_min=min(batch_losses),
+        loss_max=max(batch_losses),
         dynamics_loss=accumulators["dynamics_loss"] / num_batches,
         ae_loss=accumulators["ae_loss"] / num_batches,
         latent_1step=accumulators["latent_1step"] / num_batches,
@@ -626,7 +632,7 @@ def _build_checkpoint(
     ema_autoencoder: Autoencoder1D | None,
     optimizer: torch.optim.Optimizer,
     train_metrics: WorldModelEpochMetrics,
-    val_metrics: WorldModelEpochMetrics,
+    eval_metrics: WorldModelEpochMetrics,
     train_dataset: TransitionWindowDataset,
     context_features: tuple[str, ...],
     regime: str,
@@ -645,7 +651,7 @@ def _build_checkpoint(
         },
         "optimizer_state_dict": optimizer.state_dict(),
         "train_metrics": train_metrics.to_dict(),
-        "val_metrics": val_metrics.to_dict(),
+        "eval_metrics": eval_metrics.to_dict(),
         "config": OmegaConf.to_container(cfg, resolve=True),
         "pde_to_index": train_dataset.pde_to_index,
         "context_features": list(context_features),

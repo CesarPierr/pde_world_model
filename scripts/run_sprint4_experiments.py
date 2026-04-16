@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from pdewm.utils.wandb import compose_wandb_group, compose_wandb_name
+
 
 DEFAULT_BASELINES = ("cnn_ar_1d", "unet_ar_1d", "fno_1d", "pod_mlp_1d")
 
@@ -46,7 +48,6 @@ def main() -> None:
                 f"data.dataset_version={args.data_version}",
                 f"data.output_dir={args.data_output_dir}",
                 "data.splits.train.num_trajectories=12",
-                "data.splits.val.num_trajectories=4",
                 "data.splits.test.num_trajectories=4",
                 "data.splits.parameter_ood.num_trajectories=4",
                 f"data.num_steps={args.num_steps}",
@@ -74,8 +75,12 @@ def main() -> None:
                     project=args.wandb_project,
                     entity=args.wandb_entity,
                     mode=args.wandb_mode,
-                    group=args.wandb_group or f"sprint4_{args.data_version}",
-                    name=f"{args.data_version}_{baseline}",
+                    group=args.wandb_group or compose_wandb_group("sprint4", args.data_version, baseline),
+                    name=compose_wandb_name(
+                        "sprint4",
+                        args.data_version,
+                        baseline,
+                    ),
                     tags=["sprint4_seq", args.data_config, baseline],
                 )
             )
@@ -123,20 +128,17 @@ def _format_markdown_summary(results: list[dict[str, object]]) -> str:
     lines = [
         "# Sprint 4 Sequential Experiments",
         "",
-        "| Model | Best Val Loss | Val Rollout NRMSE | Test Rollout NRMSE |",
-        "| --- | ---: | ---: | ---: |",
+        "| Model | Final Eval Loss | Eval Rollout NRMSE |",
+        "| --- | ---: | ---: |",
     ]
     for result in results:
-        trajectory_val_metrics = result["trajectory_val_metrics"]
-        trajectory_test_metrics = result["trajectory_test_metrics"]
-        assert isinstance(trajectory_val_metrics, dict)
-        assert isinstance(trajectory_test_metrics, dict)
+        trajectory_eval_metrics = result["trajectory_eval_metrics"]
+        assert isinstance(trajectory_eval_metrics, dict)
         lines.append(
             "| "
             f"{result['model_name']} | "
-            f"{float(result['best_val_loss']):.6f} | "
-            f"{float(trajectory_val_metrics['rollout_nrmse']['mean']):.6f} | "
-            f"{float(trajectory_test_metrics['rollout_nrmse']['mean']):.6f} |"
+            f"{float(result['final_eval_loss']):.6f} | "
+            f"{float(trajectory_eval_metrics['rollout_nrmse']['mean']):.6f} |"
         )
     lines.append("")
     return "\n".join(lines)

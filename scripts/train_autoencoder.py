@@ -15,9 +15,9 @@ def main() -> None:
     cfg = load_named_config("train_autoencoder", overrides=list(args.overrides))
     seed_everything(int(cfg.project.seed))
     result = train_autoencoder(cfg)
-    print(f"best_val_loss={result['best_val_loss']:.6f}")
+    print(f"final_epoch={result['final_epoch']}")
+    print(f"final_eval_loss={result['final_eval_loss']:.6f}")
 
 
 if __name__ == "__main__":
     main()
-

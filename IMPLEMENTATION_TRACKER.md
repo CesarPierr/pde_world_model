@@ -44,7 +44,7 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
 | setup reproductible local et future machine GPU | demande utilisateur | done | workflow `uv` CPU/CUDA documenté et verrouillé via `uv.lock` |
 | baselines 1D comparables sous protocole commun | `spec_benchmarks_and_baselines.md` | done | CNN AR, U-Net AR, FNO 1D, POD+MLP, même dataset et même horizon de rollout |
 | suivi d'expériences et métriques avec wandb | `spec_ray_slurm_wandb_architecture.md` + demande utilisateur | done | instrumentation `wandb` optionnelle branchée dans `train_autoencoder.py`, `train_baseline.py`, `train_dynamics.py` et propagée dans les runners séquentiels |
-| métriques communes sur trajectoires de validation | demande utilisateur + protocole corrigé | done | val/test trajectoires partagées, `one-step` et `rollout`, `RMSE/NRMSE`, quantiles `q50/q90/q95/q99/max` dans les summaries |
+| métriques communes sur trajectoires d'évaluation | demande utilisateur + protocole corrigé | done | split unique d'éval, métriques `one-step` et `rollout`, `RMSE/NRMSE`, quantiles `p10/p25/p50/p75/p90/p95/p99`, rollouts `best/median/worst` et stats `loss_min/loss_max/loss_std` dans les summaries/W&B |
 | budget d'acquisition fixé en transitions solveur | demande utilisateur + protocole corrigé | done | unité `1 transition = (state,next_state)`, budget online distinct du dataset offline, comptage exact et pertes de transitions journalisées |
 | joint training AE+dynamics avec EMA | demande utilisateur + `spec_model_and_losses.md` | done | régimes `frozen`, `joint_no_ema`, `joint_ema`, checkpoints `student/EMA`, reprise de training supportée |
 

@@ -14,12 +14,20 @@ from pdewm.data.datasets import StateAutoencoderDataset
 from pdewm.models.representations.autoencoder_1d import Autoencoder1D, Autoencoder1DConfig
 from pdewm.models.representations.losses import AutoencoderLossWeights, compute_autoencoder_losses
 from pdewm.utils.device import resolve_device
-from pdewm.utils.wandb import flatten_metrics, init_wandb_run
+from pdewm.utils.wandb import (
+    compose_wandb_group,
+    compose_wandb_name,
+    flatten_metrics,
+    init_wandb_run,
+)
 
 
 @dataclass(slots=True)
 class EpochMetrics:
     loss: float
+    loss_std: float
+    loss_min: float
+    loss_max: float
     l1: float
     l2: float
     gradient: float
@@ -28,6 +36,9 @@ class EpochMetrics:
     def to_dict(self) -> dict[str, float]:
         return {
             "loss": self.loss,
+            "loss_std": self.loss_std,
+            "loss_min": self.loss_min,
+            "loss_max": self.loss_max,
             "l1": self.l1,
             "l2": self.l2,
             "gradient": self.gradient,
@@ -50,9 +61,9 @@ def train_autoencoder(cfg: DictConfig) -> dict[str, Any]:
         splits=tuple(cfg.train.train_splits),
         include_next_state=bool(cfg.train.include_next_state),
     )
-    val_dataset = StateAutoencoderDataset(
+    eval_dataset = StateAutoencoderDataset(
         cfg.train.dataset_root,
-        splits=tuple(cfg.train.val_splits),
+        splits=tuple(cfg.train.eval_splits),
         include_next_state=bool(cfg.train.include_next_state),
     )
 
@@ -62,8 +73,8 @@ def train_autoencoder(cfg: DictConfig) -> dict[str, Any]:
         shuffle=True,
         num_workers=int(cfg.train.num_workers),
     )
-    val_loader = DataLoader(
-        val_dataset,
+    eval_loader = DataLoader(
+        eval_dataset,
         batch_size=int(cfg.train.batch_size),
         shuffle=False,
         num_workers=int(cfg.train.num_workers),
@@ -72,11 +83,15 @@ def train_autoencoder(cfg: DictConfig) -> dict[str, Any]:
     output_dir = Path(str(cfg.train.output_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
     history: list[dict[str, Any]] = []
-    best_val = float("inf")
     wandb_run = init_wandb_run(
         cfg,
-        default_name=f"autoencoder-{output_dir.name}",
-        default_group=f"autoencoder::{Path(str(cfg.train.dataset_root)).name}",
+        default_name=compose_wandb_name(
+            "autoencoder",
+            Path(str(cfg.train.dataset_root)).name,
+            output_dir.name,
+            f"seed {int(cfg.project.seed)}",
+        ),
+        default_group=compose_wandb_group("autoencoder", Path(str(cfg.train.dataset_root)).name),
         default_job_type="train_autoencoder",
         extra_tags=["autoencoder_1d", str(OmegaConf.select(cfg, "project.phase") or "unknown_phase")],
     )
@@ -84,12 +99,12 @@ def train_autoencoder(cfg: DictConfig) -> dict[str, Any]:
     try:
         for epoch in range(1, int(cfg.train.epochs) + 1):
             train_metrics = _run_epoch(model, train_loader, optimizer, weights, device, training=True)
-            val_metrics = _run_epoch(model, val_loader, optimizer, weights, device, training=False)
+            eval_metrics = _run_epoch(model, eval_loader, optimizer, weights, device, training=False)
             history.append(
                 {
                     "epoch": epoch,
                     "train": train_metrics.to_dict(),
-                    "val": val_metrics.to_dict(),
+                    "eval": eval_metrics.to_dict(),
                 }
             )
 
@@ -98,35 +113,57 @@ def train_autoencoder(cfg: DictConfig) -> dict[str, Any]:
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "train_metrics": train_metrics.to_dict(),
-                "val_metrics": val_metrics.to_dict(),
+                "eval_metrics": eval_metrics.to_dict(),
                 "config": OmegaConf.to_container(cfg, resolve=True),
             }
             torch.save(checkpoint, output_dir / "last.pt")
-            if val_metrics.loss < best_val:
-                best_val = val_metrics.loss
-                torch.save(checkpoint, output_dir / "best.pt")
 
             wandb_run.log(
                 {
                     "epoch": epoch,
                     **flatten_metrics("train", train_metrics.to_dict()),
-                    **flatten_metrics("val", val_metrics.to_dict()),
-                    "best/val_loss": best_val,
+                    **flatten_metrics("eval", eval_metrics.to_dict()),
                 },
                 step=epoch,
             )
+            last_epoch = epoch
+            last_train_metrics = train_metrics
+            last_eval_metrics = eval_metrics
     finally:
         history_path = output_dir / "history.json"
         history_path.write_text(json.dumps(history, indent=2), encoding="utf-8")
-        summary = {"history": history, "best_val_loss": best_val}
+        summary = locals().get(
+            "summary",
+            {
+                "history": history,
+                "final_epoch": int(locals().get("last_epoch", 0)),
+                "final_eval_loss": float(
+                    getattr(locals().get("last_eval_metrics"), "loss", float("inf"))
+                ),
+                "train_metrics": locals().get("last_train_metrics").to_dict()
+                if locals().get("last_train_metrics") is not None
+                else None,
+                "eval_metrics": locals().get("last_eval_metrics").to_dict()
+                if locals().get("last_eval_metrics") is not None
+                else None,
+                "selected_checkpoint": str(output_dir / "last.pt"),
+            },
+        )
         summary_path = output_dir / "summary.json"
         summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
-        wandb_run.update_summary({"best_val_loss": best_val, "output_dir": str(output_dir)})
+        wandb_run.update_summary(
+            {
+                "final_epoch": summary.get("final_epoch"),
+                "final_eval_loss": summary.get("final_eval_loss"),
+                "selected_checkpoint": summary.get("selected_checkpoint"),
+                "output_dir": str(output_dir),
+            }
+        )
         wandb_run.save_file(history_path)
         wandb_run.save_file(summary_path)
         wandb_run.finish()
 
-    return {"history": history, "best_val_loss": best_val}
+    return summary
 
 
 def _build_model_config(cfg: DictConfig) -> Autoencoder1DConfig:
@@ -151,6 +188,7 @@ def _run_epoch(
 ) -> EpochMetrics:
     model.train(training)
     accumulators = {"loss": 0.0, "l1": 0.0, "l2": 0.0, "gradient": 0.0, "spectral": 0.0}
+    batch_losses: list[float] = []
     num_batches = 0
 
     context = torch.enable_grad() if training else torch.no_grad()
@@ -167,7 +205,9 @@ def _run_epoch(
                 total_loss.backward()
                 optimizer.step()
 
-            accumulators["loss"] += float(total_loss.detach().cpu())
+            detached_loss = float(total_loss.detach().cpu())
+            accumulators["loss"] += detached_loss
+            batch_losses.append(detached_loss)
             for key, value in components.items():
                 accumulators[key] += float(value.detach().cpu())
             num_batches += 1
@@ -177,6 +217,9 @@ def _run_epoch(
 
     return EpochMetrics(
         loss=accumulators["loss"] / num_batches,
+        loss_std=float(torch.tensor(batch_losses, dtype=torch.float64).std(unbiased=False).item()),
+        loss_min=min(batch_losses),
+        loss_max=max(batch_losses),
         l1=accumulators["l1"] / num_batches,
         l2=accumulators["l2"] / num_batches,
         gradient=accumulators["gradient"] / num_batches,
