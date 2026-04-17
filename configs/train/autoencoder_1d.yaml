@@ -8,6 +8,7 @@ learning_rate: 0.001
 weight_decay: 0.0
 device: auto
 num_workers: 0
+prefetch_factor: 2
 output_dir: artifacts/runs/autoencoder_1d
 loss_weights:
   l1: 1.0

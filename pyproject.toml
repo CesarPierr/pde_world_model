@@ -17,6 +17,7 @@ dependencies = [
   "pyyaml>=6.0",
   "scipy>=1.14",
   "torch>=2.5",
+  "tqdm>=4.66",
   "wandb>=0.19",
   "zarr>=2.18",
 ]

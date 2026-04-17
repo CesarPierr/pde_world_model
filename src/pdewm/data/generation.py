@@ -45,8 +45,31 @@ def sample_context(solver_cfg: DictConfig, split_cfg: DictConfig, rng: np.random
             pde_id="ks_1d",
             parameters={
                 "domain_length": domain_length,
+                "viscosity": float(_sample_from_spec(merged_space["viscosity_range"], rng)),
                 "ic_amplitude": float(_sample_from_spec(merged_space["ic_amplitude_range"], rng)),
                 "ic_bandwidth": float(_sample_from_spec(merged_space["ic_bandwidth_range"], rng)),
+            },
+            grid_descriptor={"grid_size": int(solver_cfg.grid_size), "domain_length": domain_length},
+            dt=float(solver_cfg.dt),
+            dimension=1,
+        )
+
+    if solver_cfg.name == "kdv_1d":
+        domain_length = float(_sample_from_spec(merged_space["domain_length_range"], rng))
+        forcing_amplitude = _sample_from_spec(merged_space["forcing_amplitude_range"], rng)
+        return PDEContext(
+            pde_id="kdv_1d",
+            parameters={
+                "domain_length": domain_length,
+                "dispersion": float(_sample_from_spec(merged_space["dispersion_range"], rng)),
+                "ic_amplitude": float(_sample_from_spec(merged_space["ic_amplitude_range"], rng)),
+                "ic_bandwidth": float(_sample_from_spec(merged_space["ic_bandwidth_range"], rng)),
+            },
+            forcing_descriptor={
+                "type": "sinusoidal",
+                "amplitude": float(forcing_amplitude),
+                "mode": int(_sample_from_spec(merged_space["forcing_mode_choices"], rng)),
+                "phase": 0.0,
             },
             grid_descriptor={"grid_size": int(solver_cfg.grid_size), "domain_length": domain_length},
             dt=float(solver_cfg.dt),

@@ -10,8 +10,8 @@ def test_ks_solver_runs_without_nan_for_short_rollout() -> None:
     solver = KuramotoSivashinsky1DSolver(grid_size=64, domain_length=22.0, contour_points=16)
     context = PDEContext(
         pde_id="ks_1d",
-        parameters={"domain_length": 22.0, "ic_amplitude": 0.8, "ic_bandwidth": 5},
-        grid_descriptor={"grid_size": 64, "domain_length": 22.0},
+        parameters={"domain_length": 64.0, "viscosity": 1.0, "ic_amplitude": 0.8, "ic_bandwidth": 5},
+        grid_descriptor={"grid_size": 64, "domain_length": 64.0},
         dt=0.05,
         dimension=1,
     )

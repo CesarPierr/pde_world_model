@@ -16,18 +16,21 @@ class KuramotoSivashinsky1DSolver(BasePDESolver):
     domain_length: float = 22.0
     contour_points: int = 16
     dealias: bool = True
+    linear_cfl: float = 0.5
+    max_substeps_per_step: int = 4096
     solver_name: str = "ks_1d"
 
     def sample_initial_condition(self, rng: np.random.Generator, context: PDEContext) -> np.ndarray:
         amplitude = context.parameters.get("ic_amplitude", 1.0)
         bandwidth = int(context.parameters.get("ic_bandwidth", 8))
-        x = np.linspace(0.0, self.domain_length, self.grid_size, endpoint=False)
+        domain_length = float(context.parameters.get("domain_length", self.domain_length))
+        x = np.linspace(0.0, domain_length, self.grid_size, endpoint=False)
         state = np.zeros_like(x)
 
         for mode in range(1, bandwidth + 1):
             coefficient = rng.normal(scale=amplitude / (mode**1.5))
             phase = rng.uniform(0.0, 2.0 * np.pi)
-            state += coefficient * np.cos(2.0 * np.pi * mode * x / self.domain_length + phase)
+            state += coefficient * np.cos(2.0 * np.pi * mode * x / domain_length + phase)
 
         return state[np.newaxis, :].astype(np.float32)
 
@@ -42,13 +45,13 @@ class KuramotoSivashinsky1DSolver(BasePDESolver):
         del options
         dt = float(dt or context.dt)
         domain_length = float(context.parameters.get("domain_length", self.domain_length))
+        viscosity = float(context.parameters.get("viscosity", 1.0))
         warnings: list[str] = []
 
         u0 = np.asarray(initial_state, dtype=np.float64).reshape(self.grid_size)
         dx = domain_length / self.grid_size
         wave_numbers = 2.0 * np.pi * np.fft.fftfreq(self.grid_size, d=dx)
-        linear_operator = wave_numbers**2 - wave_numbers**4
-        E, E2, Q, f1, f2, f3 = self._etdrk4_coefficients(linear_operator, dt)
+        linear_operator = wave_numbers**2 - viscosity * wave_numbers**4
         dealias_mask = self._dealias_mask(wave_numbers) if self.dealias else np.ones_like(wave_numbers)
 
         v = np.fft.fft(u0)
@@ -56,16 +59,27 @@ class KuramotoSivashinsky1DSolver(BasePDESolver):
         trajectory[0, 0] = u0.astype(np.float32)
         start = time.perf_counter()
         status = "ok"
+        total_substeps = 0
+        max_substeps_used = 0
 
         for step in range(1, num_steps + 1):
-            nonlinear_v = self._nonlinear_term(v, wave_numbers, dealias_mask)
-            a = E2 * v + Q * nonlinear_v
-            nonlinear_a = self._nonlinear_term(a, wave_numbers, dealias_mask)
-            b = E2 * v + Q * nonlinear_a
-            nonlinear_b = self._nonlinear_term(b, wave_numbers, dealias_mask)
-            c = E2 * a + Q * (2.0 * nonlinear_b - nonlinear_v)
-            nonlinear_c = self._nonlinear_term(c, wave_numbers, dealias_mask)
-            v = E * v + f1 * nonlinear_v + 2.0 * f2 * (nonlinear_a + nonlinear_b) + f3 * nonlinear_c
+            dt_stable = self._stable_substep(linear_operator)
+            substeps = int(np.ceil(dt / max(dt_stable, 1.0e-12)))
+            substeps = max(1, min(substeps, self.max_substeps_per_step))
+            dt_sub = dt / substeps
+            E, E2, Q, f1, f2, f3 = self._etdrk4_coefficients(linear_operator, dt_sub)
+            for _ in range(substeps):
+                nonlinear_v = self._nonlinear_term(v, wave_numbers, dealias_mask)
+                a = E2 * v + Q * nonlinear_v
+                nonlinear_a = self._nonlinear_term(a, wave_numbers, dealias_mask)
+                b = E2 * v + Q * nonlinear_a
+                nonlinear_b = self._nonlinear_term(b, wave_numbers, dealias_mask)
+                c = E2 * a + Q * (2.0 * nonlinear_b - nonlinear_v)
+                nonlinear_c = self._nonlinear_term(c, wave_numbers, dealias_mask)
+                v = E * v + f1 * nonlinear_v + 2.0 * f2 * (nonlinear_a + nonlinear_b) + f3 * nonlinear_c
+                total_substeps += 1
+
+            max_substeps_used = max(max_substeps_used, substeps)
             state = np.fft.ifft(v).real
 
             if not np.isfinite(state).all():
@@ -87,6 +101,9 @@ class KuramotoSivashinsky1DSolver(BasePDESolver):
             "max_abs_value": float(np.max(np.abs(trajectory))),
             "mean_energy": float(np.mean(trajectory**2)),
             "steps_completed": int(trajectory.shape[0] - 1),
+            "total_substeps": int(total_substeps),
+            "max_substeps_used": int(max_substeps_used),
+            "viscosity": float(viscosity),
         }
         return SimulationResult(
             trajectory=trajectory,
@@ -132,4 +149,10 @@ class KuramotoSivashinsky1DSolver(BasePDESolver):
             np.mean((-4.0 - 3.0 * lr - lr**2 + np.exp(lr) * (4.0 - lr)) / lr**3, axis=1)
         )
         return E, E2, Q, f1, f2, f3
+
+    def _stable_substep(self, linear_operator: np.ndarray) -> float:
+        max_rate = float(np.max(np.abs(linear_operator)))
+        if max_rate <= 0.0:
+            return np.inf
+        return float(self.linear_cfl / max_rate)
 

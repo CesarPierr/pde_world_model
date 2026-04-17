@@ -48,6 +48,8 @@ class EpochMetrics:
 
 def train_autoencoder(cfg: DictConfig) -> dict[str, Any]:
     device = resolve_device(str(cfg.train.device))
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True
     model = Autoencoder1D(_build_model_config(cfg.model)).to(device)
     optimizer = torch.optim.Adam(
         model.parameters(),
@@ -67,17 +69,26 @@ def train_autoencoder(cfg: DictConfig) -> dict[str, Any]:
         include_next_state=bool(cfg.train.include_next_state),
     )
 
+    num_workers = int(OmegaConf.select(cfg, "train.num_workers") or 0)
+    prefetch_factor = int(OmegaConf.select(cfg, "train.prefetch_factor") or 2)
+    loader_kwargs: dict[str, Any] = {
+        "batch_size": int(cfg.train.batch_size),
+        "num_workers": num_workers,
+        "pin_memory": device.type == "cuda",
+    }
+    if num_workers > 0:
+        loader_kwargs["persistent_workers"] = True
+        loader_kwargs["prefetch_factor"] = max(2, prefetch_factor)
+
     train_loader = DataLoader(
         train_dataset,
-        batch_size=int(cfg.train.batch_size),
         shuffle=True,
-        num_workers=int(cfg.train.num_workers),
+        **loader_kwargs,
     )
     eval_loader = DataLoader(
         eval_dataset,
-        batch_size=int(cfg.train.batch_size),
         shuffle=False,
-        num_workers=int(cfg.train.num_workers),
+        **loader_kwargs,
     )
 
     output_dir = Path(str(cfg.train.output_dir))

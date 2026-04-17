@@ -1,12 +1,13 @@
 name: ks_1d
 pde_id: ks_1d
 grid_size: 256
-domain_length: 22.0
+domain_length: 64.0
 contour_points: 16
 dealias: true
 dt: 0.1
 parameter_space:
-  domain_length_range: [20.0, 24.0]
-  ic_amplitude_range: [0.3, 1.1]
-  ic_bandwidth_range: [3, 8]
+  domain_length_range: [56.0, 72.0]
+  viscosity_range: [0.6, 1.8]
+  ic_amplitude_range: [0.3, 1.2]
+  ic_bandwidth_range: [3, 10]
 

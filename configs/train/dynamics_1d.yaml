@@ -23,6 +23,7 @@ ae_weight_decay: 0.0
 ae_loss_scale: 1.0
 device: auto
 num_workers: 0
+prefetch_factor: 2
 output_dir: artifacts/runs/dynamics_1d
 loss_weights:
   latent_1step: 1.0

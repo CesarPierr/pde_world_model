@@ -1,4 +1,4 @@
-dataset_name: ks_1d_offline
+dataset_name: kdv_1d_offline
 dataset_version: v0
 output_dir: data/generated
 sample_origin: offline
@@ -14,6 +14,8 @@ splits:
   parameter_ood:
     num_trajectories: 6
     param_overrides:
-      domain_length_range: [80.0, 96.0]
-      viscosity_range: [1.8, 2.5]
+      domain_length_range: [44.0, 56.0]
+      dispersion_range: [2.0, 3.0]
       ic_amplitude_range: [1.0, 1.8]
+      forcing_amplitude_range: [0.05, 0.15]
+      forcing_mode_choices: [3, 4, 5, 6]

@@ -1,0 +1,13 @@
+name: kdv_1d
+pde_id: kdv_1d
+grid_size: 256
+domain_length: 32.0
+dealias: true
+dt: 0.02
+parameter_space:
+  domain_length_range: [24.0, 40.0]
+  dispersion_range: [0.5, 2.0]
+  ic_amplitude_range: [0.3, 1.4]
+  ic_bandwidth_range: [2, 8]
+  forcing_amplitude_range: [0.0, 0.08]
+  forcing_mode_choices: [1, 2, 3, 4]
