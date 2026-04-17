@@ -146,7 +146,9 @@ def _render_rollout_figure(
     import matplotlib.pyplot as plt
 
     error = prediction - target
-    signal_limit = float(max(np.max(np.abs(target)), np.max(np.abs(prediction)), 1.0e-6))
+    # Keep a consistent, data-driven scale: target defines the reference range.
+    # This prevents divergent predictions from collapsing the visible contrast.
+    signal_limit = float(max(np.max(np.abs(target)), 1.0e-6))
     error_limit = float(max(np.max(np.abs(error)), 1.0e-6))
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 4), constrained_layout=True)
