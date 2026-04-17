@@ -28,6 +28,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 
 from pdewm.acquisition.generative import (
     FlowMatchingSamplerConfig,
@@ -47,7 +48,7 @@ from pdewm.data.schema import DatasetManifest, TransitionRecord
 from pdewm.data.writer import OfflineDatasetWriter
 from pdewm.utils.device import resolve_device
 from pdewm.utils.git import get_git_commit_hash
-from pdewm.utils.wandb import compose_wandb_group, compose_wandb_name
+from pdewm.utils.wandb import compose_wandb_group
 
 
 # --------------------------------------------------------------------------
@@ -151,6 +152,7 @@ def main() -> None:
     output_root = Path(args.output_root)
     output_root.mkdir(parents=True, exist_ok=True)
     dataset_root = Path(args.dataset_root)
+    benchmark_run_token = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
 
     # --- Data generation ---
     if args.prepare_data or not dataset_root.exists():
@@ -187,16 +189,11 @@ def main() -> None:
             enabled=args.wandb, project=args.wandb_project,
             entity=args.wandb_entity, mode=args.wandb_mode,
             group=args.wandb_group or compose_wandb_group(
-                "generative-benchmark",
+                "gb",
                 args.data_version,
-                "warmup-autoencoder",
+                "ae",
             ),
-            name=compose_wandb_name(
-                "generative benchmark",
-                args.data_version,
-                "warmup autoencoder",
-                f"seed {args.seed}",
-            ),
+            name=f"gb/ae/{args.data_version}/s{int(args.seed)}",
             tags=["generative_benchmark", args.data_config, "warmup_ae"],
         ))
         _run(ae_cmd)
@@ -248,6 +245,7 @@ def main() -> None:
             offline_transitions=offline_transitions,
             selected_regime=selected_regime,
             selected_regime_result=selected_regime_result,
+            benchmark_run_token=benchmark_run_token,
             args=args,
         )
 
@@ -277,6 +275,7 @@ def _run_strategy_benchmark(
     *, strategy: str, dataset_root: Path, output_dir: Path,
     ae_checkpoint: Path, offline_transitions: int,
     selected_regime: str, selected_regime_result: dict[str, Any],
+    benchmark_run_token: str,
     args,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -306,6 +305,13 @@ def _run_strategy_benchmark(
     is_generative = strategy.startswith("generative_")
     current_dataset_root = dataset_root
     current_committee_checkpoints = list(selected_regime_result["member_checkpoints"])
+    acquisition_wandb_run_ids = _build_acquisition_wandb_run_ids(
+        strategy=strategy,
+        regime=selected_regime,
+        ensemble_size=len(current_committee_checkpoints),
+        seed=int(args.seed),
+        run_token=benchmark_run_token,
+    )
     cumulative_online = 0
     round_index = 0
     device = resolve_device("auto")
@@ -383,6 +389,7 @@ def _run_strategy_benchmark(
             dyn_num_blocks=args.dyn_num_blocks,
             wandb_args=args, strategy=strategy,
             round_index=round_index + 1,
+            wandb_run_ids=acquisition_wandb_run_ids,
         )
 
         cumulative_online += acquisition.transitions_acquired
@@ -425,8 +432,6 @@ def _generate_flow_candidates(
     For ``generative_combined``, merges flow candidates with heuristic
     candidates for the best of both worlds.
     """
-    import torch
-
     # Compute transition losses and get 2D latents
     print("  Computing transition losses...")
     latents_2d, losses = compute_transition_losses(
@@ -527,18 +532,12 @@ def _run_regime_ablation(
                 entity=wandb_args.wandb_entity,
                 mode=wandb_args.wandb_mode,
                 group=wandb_args.wandb_group or compose_wandb_group(
-                    "generative-benchmark",
+                    "gb",
                     wandb_args.data_version,
-                    "regime-ablation",
+                    "abl",
                     regime,
                 ),
-                name=compose_wandb_name(
-                    "generative benchmark",
-                    "regime ablation",
-                    regime,
-                    f"seed {seed + mi}",
-                    f"member {mi:02d}",
-                ),
+                name=f"gb/abl/{regime}/m{mi:02d}/s{seed + mi}",
                 tags=["generative_benchmark", "regime_ablation", regime],
             ))
             _run(cmd)
@@ -562,8 +561,13 @@ def _fine_tune_committee(
     resume_checkpoints: list[str], batch_size: int,
     dyn_hidden: int, dyn_ctx_hidden: int, dyn_ctx_output: int,
     dyn_num_blocks: int, wandb_args, strategy: str, round_index: int,
+    wandb_run_ids: list[str],
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
+    if len(wandb_run_ids) != ensemble_size:
+        raise ValueError(
+            f"Expected {ensemble_size} wandb run ids, got {len(wandb_run_ids)}."
+        )
     member_summaries = []
     member_checkpoints = []
     for mi in range(ensemble_size):
@@ -579,6 +583,7 @@ def _fine_tune_committee(
                 f"project.seed={seed + mi}",
                 f"train.regime={regime}",
                 f"train.resume_checkpoint={resume_checkpoints[mi]}",
+                f"train.epoch_offset={(round_index - 1) * epochs}",
                 f"train.batch_size={batch_size}",
                 "train.ae_loss_scale=1.0", "train.ema.decay=0.995",
                 f"model.hidden_channels={dyn_hidden}",
@@ -592,19 +597,15 @@ def _fine_tune_committee(
                 entity=wandb_args.wandb_entity,
                 mode=wandb_args.wandb_mode,
                 group=wandb_args.wandb_group or compose_wandb_group(
-                    "generative-benchmark",
+                    "gb",
                     wandb_args.data_version,
-                    "acquisition",
+                    "acq",
                     strategy,
                 ),
-                name=compose_wandb_name(
-                    "generative benchmark",
-                    strategy,
-                    f"round {round_index:02d}",
-                    f"seed {seed + mi}",
-                    f"member {mi:02d}",
-                ),
+                name=f"gb/acq/{strategy}/{regime}/m{mi:02d}",
                 tags=["generative_benchmark", "acquisition", strategy, regime],
+                run_id=wandb_run_ids[mi],
+                resume="allow",
             ))
             _run(cmd)
         member_summaries.append(json.loads(member_summary.read_text(encoding="utf-8")))
@@ -784,7 +785,18 @@ def _run(cmd):
     subprocess.run(cmd, check=True)
 
 
-def _wandb_overrides(*, enabled, project, entity, mode, group, name, tags):
+def _wandb_overrides(
+    *,
+    enabled,
+    project,
+    entity,
+    mode,
+    group,
+    name,
+    tags,
+    run_id: str | None = None,
+    resume: str | None = None,
+):
     if not enabled:
         return ["logging.wandb.enabled=false"]
     overrides = [
@@ -795,9 +807,33 @@ def _wandb_overrides(*, enabled, project, entity, mode, group, name, tags):
         f"logging.wandb.name={name}",
         f"logging.wandb.tags=[{','.join(tags)}]",
     ]
+    if run_id:
+        overrides.append(f"logging.wandb.id={run_id}")
+    if resume:
+        overrides.append(f"logging.wandb.resume={resume}")
     if entity:
         overrides.append(f"logging.wandb.entity={entity}")
     return overrides
+
+
+def _build_acquisition_wandb_run_ids(
+    *,
+    strategy: str,
+    regime: str,
+    ensemble_size: int,
+    seed: int,
+    run_token: str,
+) -> list[str]:
+    prefix = _normalise_wandb_id(
+        f"gb_{run_token}_{strategy}_{regime}_s{seed}"
+    )
+    return [f"{prefix}_m{mi:02d}" for mi in range(ensemble_size)]
+
+
+def _normalise_wandb_id(raw: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in raw)
+    cleaned = cleaned.strip("_-")
+    return cleaned[:96] or "gb_run"
 
 
 if __name__ == "__main__":

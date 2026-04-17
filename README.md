@@ -28,25 +28,25 @@ A publication-grade latent world model for PDE benchmarks with **active acquisit
 
 - Python 3.11 or 3.12
 - [`uv`](https://docs.astral.sh/uv/) package manager
-- (Optional) NVIDIA GPU with CUDA 12.4+
+- (Optional) NVIDIA GPU with CUDA-compatible driver
 
 ### macOS / CPU
 
 ```bash
 git clone https://github.com/CesarPierr/pde_world_model.git
 cd pde_world_model
-TORCH_BACKEND=cpu ./scripts/bootstrap_uv.sh
+./scripts/bootstrap_uv.sh
 ```
 
-### Linux / NVIDIA GPU (CUDA 12.4)
+### Linux / NVIDIA GPU
 
 ```bash
 git clone https://github.com/CesarPierr/pde_world_model.git
 cd pde_world_model
-TORCH_BACKEND=cu124 ./scripts/bootstrap_uv.sh
+TORCH_BACKEND=auto ./scripts/bootstrap_uv.sh
 ```
 
-Other supported CUDA backends: `cu126`, `cu128`.
+To force a specific backend, pass `TORCH_BACKEND=<uv-supported-backend>` (for example `cpu`).
 
 ### Verify installation
 

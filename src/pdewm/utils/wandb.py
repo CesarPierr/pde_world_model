@@ -71,6 +71,8 @@ def init_wandb_run(
     run_name = _maybe_string(wandb_cfg.name) or default_name
     group = _maybe_string(wandb_cfg.group) or default_group
     job_type = _maybe_string(wandb_cfg.job_type) or default_job_type
+    run_id = _maybe_string(OmegaConf.select(cfg, "logging.wandb.id"))
+    resume_mode = _maybe_string(OmegaConf.select(cfg, "logging.wandb.resume"))
     tags = list(wandb_cfg.tags or [])
     if extra_tags:
         tags.extend(extra_tags)
@@ -88,6 +90,8 @@ def init_wandb_run(
         tags=tags or None,
         dir=str(run_dir),
         config=OmegaConf.to_container(cfg, resolve=True),
+        id=run_id,
+        resume=resume_mode,
     )
     return WandbRunHandle(run=run)
 

@@ -165,6 +165,7 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
             str(OmegaConf.select(cfg, "project.phase") or "unknown_phase"),
         ],
     )
+    epoch_offset = int(OmegaConf.select(cfg, "train.epoch_offset") or 0)
 
     try:
         for epoch in range(1, int(cfg.train.epochs) + 1):
@@ -224,7 +225,7 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
                     **flatten_metrics("train", train_metrics.to_dict()),
                     **flatten_metrics("eval", eval_metrics.to_dict()),
                 },
-                step=epoch,
+                step=epoch_offset + epoch,
             )
             last_epoch = epoch
             last_train_metrics = train_metrics
@@ -267,7 +268,7 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
 
         summary = {
             "regime": regime,
-            "final_epoch": int(last_epoch),
+            "final_epoch": int(epoch_offset + last_epoch),
             "final_eval_loss": float(eval_final_metrics.loss),
             "acquisition_autoencoder_source": _acquisition_autoencoder_source(regime),
             "train_metrics": last_train_metrics.to_dict(),
@@ -283,7 +284,7 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
             "summary",
             {
                 "regime": regime,
-                "final_epoch": int(locals().get("last_epoch", 0)),
+                "final_epoch": int(epoch_offset + int(locals().get("last_epoch", 0))),
                 "final_eval_loss": float(
                     getattr(locals().get("last_eval_metrics"), "loss", float("inf"))
                 ),
@@ -300,6 +301,7 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
                     f"rollout_figures/eval_{rank_label}": payload.figure,
                     f"rollout_figures/eval_{rank_label}_rmse": payload.rollout_rmse,
                     f"rollout_figures/eval_{rank_label}_trajectory_id": payload.trajectory_id,
+                    f"simulations/eval_{rank_label}_txg": payload.figure,
                 }
             )
             wandb_run.save_file(figure_path)

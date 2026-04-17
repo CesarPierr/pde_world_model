@@ -13,19 +13,19 @@ Le dépôt utilise `uv` pour standardiser l'environnement local et machine GPU.
 ### macOS / CPU
 
 ```bash
-TORCH_BACKEND=cpu ./scripts/bootstrap_uv.sh
+./scripts/bootstrap_uv.sh
 ```
 
-### Linux / NVIDIA CUDA 12.4
-
-```bash
-TORCH_BACKEND=cu124 ./scripts/bootstrap_uv.sh
-```
-
-### Linux / auto-détection PyTorch
+### Linux / NVIDIA
 
 ```bash
 TORCH_BACKEND=auto ./scripts/bootstrap_uv.sh
+```
+
+### Forcer un backend PyTorch
+
+```bash
+TORCH_BACKEND=cpu ./scripts/bootstrap_uv.sh
 ```
 
 ## Commandes de travail
@@ -184,6 +184,5 @@ Ce runner produit:
 ## Notes plateforme
 
 - Le dépôt reste compatible avec `uv run` sur macOS CPU pour Burgers/KS 1D.
-- Pour Linux NVIDIA, `uv sync --torch-backend cu124` permet d'installer une roue PyTorch CUDA sans modifier `pyproject.toml`.
-- Le script `bootstrap_uv.sh` fait un `uv sync` standard puis réinstalle `torch` avec le backend demandé quand `TORCH_BACKEND != cpu`.
+- Pour Linux NVIDIA, `bootstrap_uv.sh` fait un `uv sync` standard puis, si `TORCH_BACKEND` est explicitement fixé (`cpu`, `cu124`, etc.), applique un `uv pip install --exact --torch-backend ...` pour garder une stack PyTorch/CUDA cohérente.
 - Les benchmarks 2D et la suite Ray/Slurm devront être validés sur une machine Linux dédiée; le Mac est ciblé pour les premiers sprints 1D.
