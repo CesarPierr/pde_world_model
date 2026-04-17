@@ -34,6 +34,12 @@ Mémoire persistante de pilotage. Ce fichier résume où reprendre le travail sa
   - 3 nouvelles stratégies: `generative_loss_weighted`, `generative_uniform`, `generative_combined`;
   - `scripts/run_worldmodel_generative_benchmark.py`: benchmark 9 stratégies;
   - 33 tests passent (24 originaux + 9 nouveaux).
+- updates benchmark génératif récentes:
+  - regroupement W&B par type d'expérience via `--wandb-group` (préfixe de campagne + sous-groupe sémantique);
+  - mode parallèle pour entraînement des membres d'ensemble: `--ensemble-train-mode parallel --ensemble-max-parallel N`;
+  - surcharge `--ensemble-size` respectée même sous `--benchmark-profile realistic_1d`;
+  - quantiles NRMSE (`p25/p50/p75`) exposés dans le summary benchmark et envoyés explicitement à W&B;
+  - plot rollout en échelle logarithmique pour meilleure séparation visuelle.
 
 ## Règles de conduite du projet
 
@@ -51,3 +57,4 @@ Mémoire persistante de pilotage. Ce fichier résume où reprendre le travail sa
 5. étendre les benchmarks à `ks_1d`;
 6. mettre à jour ce fichier et le tracker après chaque bloc livré;
 7. conserver la discipline commit par commit avec vérification locale avant chaque commit.
+8. pour GPU 8GB (RTX 2070 Super), préférer `--ensemble-size 3` et `--ensemble-max-parallel 1..2` selon VRAM disponible.

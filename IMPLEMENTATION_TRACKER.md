@@ -87,6 +87,13 @@ Ce fichier suit l'état réel d'implémentation du dépôt par rapport aux notes
   - `scripts/run_worldmodel_generative_benchmark.py`: benchmark 9 stratégies (6 heuristiques + 3 génératives);
   - `tests/test_generative.py`: 9 tests unitaires (compressor, decompressor, velocity net, sampler fit/sample, temperature=0);
   - tous les 33 tests passent.
+- améliorations benchmark génératif (W&B + orchestration + métriques):
+  - logique `--wandb-group` harmonisée: préfixe de campagne + sous-groupes sémantiques (`ae`, `abl/<regime>`, `acq/<strategy>/<regime>`), appliquée aux scripts benchmark;
+  - mode d'entraînement parallèle du comité ajouté dans `run_worldmodel_generative_benchmark.py` (`--ensemble-train-mode`, `--ensemble-max-parallel`);
+  - `--ensemble-size` explicite préservé même avec le profil `realistic_1d` (ne repasse plus automatiquement à 5 si surchargé);
+  - résumé benchmark enrichi avec quantiles NRMSE (`p25/p50/p75`) pour one-step et rollout;
+  - export explicite des quantiles finaux vers W&B (`trajectory_eval/final/*`) + `ae_eval/final/*`;
+  - courbe rollout `eval_nrmse_curves.png` en échelle log sur l'axe Y.
 
 ## Prochaines actions fermes
 

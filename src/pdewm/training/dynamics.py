@@ -88,6 +88,8 @@ class WorldModelEpochMetrics:
 
 def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
     device = resolve_device(str(cfg.train.device))
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True
     regime = str(OmegaConf.select(cfg, "train.regime") or "frozen")
     if regime not in {"frozen", "joint_no_ema", "joint_ema"}:
         raise ValueError(f"Unsupported training regime: {regime}")
@@ -132,17 +134,26 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
             regime=regime,
         )
 
+    num_workers = int(OmegaConf.select(cfg, "train.num_workers") or 0)
+    prefetch_factor = int(OmegaConf.select(cfg, "train.prefetch_factor") or 2)
+    loader_kwargs: dict[str, Any] = {
+        "batch_size": int(cfg.train.batch_size),
+        "num_workers": num_workers,
+        "pin_memory": device.type == "cuda",
+    }
+    if num_workers > 0:
+        loader_kwargs["persistent_workers"] = True
+        loader_kwargs["prefetch_factor"] = max(2, prefetch_factor)
+
     train_loader = DataLoader(
         train_dataset,
-        batch_size=int(cfg.train.batch_size),
         shuffle=True,
-        num_workers=int(cfg.train.num_workers),
+        **loader_kwargs,
     )
     eval_loader = DataLoader(
         eval_dataset,
-        batch_size=int(cfg.train.batch_size),
         shuffle=False,
-        num_workers=int(cfg.train.num_workers),
+        **loader_kwargs,
     )
 
     output_dir = Path(str(cfg.train.output_dir))
@@ -293,6 +304,27 @@ def train_latent_dynamics(cfg: DictConfig) -> dict[str, Any]:
         )
         summary_path = output_dir / "summary.json"
         summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+
+        trajectory_eval_metrics_obj = locals().get("trajectory_eval_metrics")
+        if trajectory_eval_metrics_obj is not None:
+            trajectory_eval_payload = trajectory_eval_metrics_obj.to_dict()
+            final_step = int(epoch_offset + int(locals().get("last_epoch", 0)))
+            wandb_run.log(
+                {
+                    **flatten_metrics("trajectory_eval/final", trajectory_eval_payload),
+                },
+                step=final_step,
+            )
+            wandb_run.update_summary(
+                flatten_metrics("trajectory_eval/final", trajectory_eval_payload)
+            )
+
+        ae_eval_metrics_obj = locals().get("ae_eval_metrics")
+        if ae_eval_metrics_obj is not None:
+            wandb_run.update_summary(
+                flatten_metrics("ae_eval/final", ae_eval_metrics_obj.to_dict())
+            )
+
         for rank_label, payload in locals().get("rollout_eval_figures", {}).items():
             figure_path = output_dir / f"rollout_eval_{rank_label}.png"
             payload.figure.savefig(figure_path, dpi=160, bbox_inches="tight")

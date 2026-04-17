@@ -138,6 +138,22 @@ uv run python scripts/run_worldmodel_generative_benchmark.py \
   --wandb --prepare-data --prepare-ae
 ```
 
+Recommended on 8GB GPUs (RTX 2070 Super class):
+
+```bash
+uv run python scripts/run_worldmodel_generative_benchmark.py \
+  --benchmark-profile realistic_1d \
+  --ensemble-size 3 \
+  --ensemble-train-mode parallel \
+  --ensemble-max-parallel 2 \
+  --wandb
+```
+
+Notes:
+- `--ensemble-size` now remains respected even with `--benchmark-profile realistic_1d`.
+- `--ensemble-train-mode parallel` controls committee-member concurrency.
+- W&B groups are hierarchical by experiment type when using `--wandb-group` (campaign prefix + semantic subgroup).
+
 The 3 new generative strategies use a **Conditional Flow Matching** model trained in a compressed 512-dim latent space with loss-weighted sampling:
 
 | Strategy | Description |
@@ -220,6 +236,8 @@ Override manually: `train.device=cpu` or `train.device=cuda:1`.
 - **W&B**: Pass `--wandb` to any benchmark script
 - **Local summaries**: Each run produces `summary.json` + `summary.md` in its output directory
 - **Acquisition curves**: Auto-generated PNG plots comparing strategies
+- **Quantiles**: trajectory metrics include `p25/p50/p75` (and other quantiles) in summaries and W&B under `trajectory_eval/final/*`
+- **Rollout plot scale**: rollout NRMSE axis is logarithmic in `eval_nrmse_curves.png`
 
 ## Development
 

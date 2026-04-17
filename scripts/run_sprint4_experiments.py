@@ -75,7 +75,12 @@ def main() -> None:
                     project=args.wandb_project,
                     entity=args.wandb_entity,
                     mode=args.wandb_mode,
-                    group=args.wandb_group or compose_wandb_group("sprint4", args.data_version, baseline),
+                    group=_resolve_wandb_group(
+                        args.wandb_group,
+                        "sprint4",
+                        args.data_version,
+                        baseline,
+                    ),
                     name=compose_wandb_name(
                         "sprint4",
                         args.data_version,
@@ -122,6 +127,13 @@ def _wandb_overrides(
     if entity:
         overrides.append(f"logging.wandb.entity={entity}")
     return overrides
+
+
+def _resolve_wandb_group(group_override: str | None, *group_parts: object) -> str:
+    prefix = str(group_override).strip() if group_override is not None else ""
+    if prefix:
+        return compose_wandb_group(prefix, *group_parts)
+    return compose_wandb_group(*group_parts)
 
 
 def _format_markdown_summary(results: list[dict[str, object]]) -> str:

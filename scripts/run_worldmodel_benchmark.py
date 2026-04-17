@@ -115,8 +115,12 @@ def main() -> None:
                 project=args.wandb_project,
                 entity=args.wandb_entity,
                 mode=args.wandb_mode,
-                group=args.wandb_group
-                or compose_wandb_group("worldmodel-benchmark", args.data_version, "warmup-autoencoder"),
+                group=_resolve_wandb_group(
+                    args.wandb_group,
+                    "worldmodel-benchmark",
+                    args.data_version,
+                    "warmup-autoencoder",
+                ),
                 name=compose_wandb_name("worldmodel-benchmark", args.data_version, "warmup autoencoder"),
                 tags=["worldmodel_benchmark", args.data_config, "warmup_autoencoder"],
             )
@@ -238,8 +242,8 @@ def _run_regime_ablation(
                     project=wandb_args.wandb_project,
                     entity=wandb_args.wandb_entity,
                     mode=wandb_args.wandb_mode,
-                    group=wandb_args.wandb_group
-                    or compose_wandb_group(
+                    group=_resolve_wandb_group(
+                        wandb_args.wandb_group,
                         "worldmodel-benchmark",
                         wandb_args.data_version,
                         "regime-ablation",
@@ -463,12 +467,13 @@ def _fine_tune_committee(
                     project=wandb_args.wandb_project,
                     entity=wandb_args.wandb_entity,
                     mode=wandb_args.wandb_mode,
-                    group=wandb_args.wandb_group
-                    or compose_wandb_group(
+                    group=_resolve_wandb_group(
+                        wandb_args.wandb_group,
                         "worldmodel-benchmark",
                         wandb_args.data_version,
                         "acquisition",
                         strategy,
+                        regime,
                     ),
                     name=compose_wandb_name(
                         "worldmodel-benchmark",
@@ -745,6 +750,13 @@ def _wandb_overrides(
     if entity:
         overrides.append(f"logging.wandb.entity={entity}")
     return overrides
+
+
+def _resolve_wandb_group(group_override: str | None, *group_parts: Any) -> str:
+    prefix = str(group_override).strip() if group_override is not None else ""
+    if prefix:
+        return compose_wandb_group(prefix, *group_parts)
+    return compose_wandb_group(*group_parts)
 
 
 if __name__ == "__main__":

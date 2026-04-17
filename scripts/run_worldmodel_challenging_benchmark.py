@@ -168,7 +168,8 @@ def main() -> None:
                 ae_cmd.extend(_wandb_overrides(
                     enabled=args.wandb, project=args.wandb_project, entity=args.wandb_entity,
                     mode=args.wandb_mode,
-                    group=args.wandb_group or compose_wandb_group(
+                    group=_resolve_wandb_group(
+                        args.wandb_group,
                         "challenging-benchmark",
                         args.data_version,
                         pde_id,
@@ -332,7 +333,8 @@ def _run_regime_ablation(
                 project=wandb_args.wandb_project,
                 entity=wandb_args.wandb_entity,
                 mode=wandb_args.wandb_mode,
-                group=wandb_args.wandb_group or compose_wandb_group(
+                group=_resolve_wandb_group(
+                    wandb_args.wandb_group,
                     "challenging-benchmark",
                     wandb_args.data_version,
                     pde_id,
@@ -570,12 +572,14 @@ def _fine_tune_committee(
                 project=wandb_args.wandb_project,
                 entity=wandb_args.wandb_entity,
                 mode=wandb_args.wandb_mode,
-                group=wandb_args.wandb_group or compose_wandb_group(
+                group=_resolve_wandb_group(
+                    wandb_args.wandb_group,
                     "challenging-benchmark",
                     wandb_args.data_version,
                     pde_id,
                     "acquisition",
                     strategy,
+                    regime,
                 ),
                 name=compose_wandb_name(
                     "challenging benchmark",
@@ -825,6 +829,13 @@ def _wandb_overrides(
     if entity:
         overrides.append(f"logging.wandb.entity={entity}")
     return overrides
+
+
+def _resolve_wandb_group(group_override: str | None, *group_parts: Any) -> str:
+    prefix = str(group_override).strip() if group_override is not None else ""
+    if prefix:
+        return compose_wandb_group(prefix, *group_parts)
+    return compose_wandb_group(*group_parts)
 
 
 if __name__ == "__main__":

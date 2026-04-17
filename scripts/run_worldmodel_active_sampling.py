@@ -96,7 +96,12 @@ def main() -> None:
                 project=args.wandb_project,
                 entity=args.wandb_entity,
                 mode=args.wandb_mode,
-                group=args.wandb_group or compose_wandb_group("worldmodel-active", args.data_version, "autoencoder"),
+                group=_resolve_wandb_group(
+                    args.wandb_group,
+                    "worldmodel-active",
+                    args.data_version,
+                    "autoencoder",
+                ),
                 name=compose_wandb_name("worldmodel-active", args.data_version, "autoencoder"),
                 tags=["active_sampling", args.data_config, "autoencoder_1d"],
             )
@@ -140,8 +145,12 @@ def main() -> None:
                         project=args.wandb_project,
                         entity=args.wandb_entity,
                         mode=args.wandb_mode,
-                        group=args.wandb_group
-                        or compose_wandb_group("worldmodel-active", args.data_version, "dynamics-committee"),
+                        group=_resolve_wandb_group(
+                            args.wandb_group,
+                            "worldmodel-active",
+                            args.data_version,
+                            "dynamics-committee",
+                        ),
                         name=compose_wandb_name(
                             "worldmodel-active",
                             args.data_version,
@@ -316,6 +325,13 @@ def _wandb_overrides(
     if entity:
         overrides.append(f"logging.wandb.entity={entity}")
     return overrides
+
+
+def _resolve_wandb_group(group_override: str | None, *group_parts: object) -> str:
+    prefix = str(group_override).strip() if group_override is not None else ""
+    if prefix:
+        return compose_wandb_group(prefix, *group_parts)
+    return compose_wandb_group(*group_parts)
 
 
 if __name__ == "__main__":
